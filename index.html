@@ -148,7 +148,10 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
   overflow:hidden;transition:width .3s ease;z-index:100;
 }
 #map-sidebar.collapsed{width:0}
-#map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px}
+#map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px;height:100%}
+/* Rimuovi la punta dei popup Leaflet */
+.leaflet-popup-tip-container{display:none!important}
+.leaflet-popup-content-wrapper{border-radius:var(--r)!important;box-shadow:var(--sh-md)!important}
 /* toggle: posizionato assoluto in map-page, animato con right */
 #map-sidebar-toggle{
   position:absolute;top:50%;right:340px;transform:translateY(-50%);
