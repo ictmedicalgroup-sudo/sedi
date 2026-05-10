@@ -447,6 +447,9 @@ function buildMultiSelCat(id,selIds,onChange){
     e.stopPropagation();
     wrapper.querySelector(`#ms-dd-${id}`).classList.toggle('hid');
   });
+  wrapper.querySelector(`#ms-dd-${id}`).addEventListener('click',e=>{
+    e.stopPropagation();
+  });
   document.addEventListener('click',()=>wrapper.querySelector(`#ms-dd-${id}`)?.classList.add('hid'));
   wrapper.querySelector(`#ms-chk-all-${id}`).addEventListener('change',e=>{
     const checked=e.target.checked;
@@ -507,11 +510,15 @@ function buildMultiSel(id,selIds,onChange){
       `).join('')}
     </div>`;
 
-  // toggle dropdown
+  // toggle dropdown — si chiude solo cliccando fuori
   wrapper.querySelector(`#ms-btn-${id}`).addEventListener('click',e=>{
     e.stopPropagation();
     const dd=wrapper.querySelector(`#ms-dd-${id}`);
     dd.classList.toggle('hid');
+  });
+  // click dentro il dropdown NON chiude
+  wrapper.querySelector(`#ms-dd-${id}`).addEventListener('click',e=>{
+    e.stopPropagation();
   });
   document.addEventListener('click',()=>{
     wrapper.querySelector(`#ms-dd-${id}`)?.classList.add('hid');
@@ -823,17 +830,21 @@ function updateMapMarkers(){
     if(!sediIds.has(sid)){S.mappa.markers[sid].remove();delete S.mappa.markers[sid];}
   });
   const bounds=[];
-  sediConCoord.forEach(sede=>{
+  sediConCoord.forEach((sede,idx)=>{
     if(!S.mappa.markers[sede.id]){
       const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
-      const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:300,offset:[0,-5]});
+      // offset per evitare sovrapposizioni: alterna in base all'indice
+      const offsets=[[0,-5],[160,-5],[-160,-5],[0,-120],[160,-120],[-160,-120]];
+      const off=offsets[idx%offsets.length];
+      const popup=L.popup({
+        autoClose:false,closeOnClick:false,
+        maxWidth:280,offset:L.point(off[0],off[1])
+      });
       popup.setContent(buildPopupContent(sede));
       marker.on('click',function(){
-        // toggle: aggiorna lo stato e sincronizza il checkbox
         const wasOpen=S.mappa.popupOpen[sede.id]||false;
         S.mappa.popupOpen[sede.id]=!wasOpen;
         applyPopupState(sede.id);
-        // aggiorna il checkbox nel pannello
         const cb=document.getElementById(`msc-${sede.id}`);
         if(cb) cb.checked=S.mappa.popupOpen[sede.id];
       });
