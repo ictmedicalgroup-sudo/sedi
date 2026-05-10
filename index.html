@@ -737,6 +737,14 @@ function renderMappa(pb){
   }
   tog.addEventListener('click',()=>setSbState(!_sbOpen));
 
+  // inizializza popupOpen PRIMA di renderMapSediChecks
+  S.mappa.markers={};
+  S.mappa._fitted=false;
+  S.mappa.popupOpen={};
+  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
+    S.mappa.popupOpen[s.id]=S.mappa.sediSel.includes(s.id);
+  });
+
   // sedi checkboxes nel pannello
   renderMapSediChecks();
   $('map-sel-all').addEventListener('click',()=>{
@@ -761,13 +769,6 @@ function renderMappa(pb){
     iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-14],className:''
   });
   S.mappa._icon=greenIcon;
-  S.mappa.markers={};
-  S.mappa._fitted=false;
-  // al primo caricamento: popup aperti per tutte le sedi selezionate
-  S.mappa.popupOpen={};
-  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
-    S.mappa.popupOpen[s.id]=S.mappa.sediSel.includes(s.id);
-  });
 
   updateMapMarkers();
   renderSidebarCampi();
