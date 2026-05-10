@@ -740,11 +740,13 @@ function renderMappa(pb){
   // sedi checkboxes nel pannello
   renderMapSediChecks();
   $('map-sel-all').addEventListener('click',()=>{
-    S.mappa.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
-    renderMapSediChecks(); updateMapMarkers();
+    S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{S.mappa.popupOpen[s.id]=true;S.mappa.sediSel=S.sedi.filter(x=>x.attiva).map(x=>x.id);});
+    renderMapSediChecks(); Object.keys(S.mappa.markers).forEach(sid=>applyPopupState(sid));
   });
   $('map-sel-none').addEventListener('click',()=>{
-    S.mappa.sediSel=[]; renderMapSediChecks(); updateMapMarkers();
+    S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>S.mappa.popupOpen[s.id]=false);
+    S.mappa.sediSel=[];
+    renderMapSediChecks(); Object.keys(S.mappa.markers).forEach(sid=>applyPopupState(sid));
   });
 
   // Leaflet init
@@ -759,10 +761,13 @@ function renderMappa(pb){
     iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-14],className:''
   });
   S.mappa._icon=greenIcon;
-  // reset markers solo quando si inizializza la mappa (non ad ogni updateMapMarkers)
   S.mappa.markers={};
   S.mappa._fitted=false;
-  S.mappa.popupWasOpen={};
+  // al primo caricamento: popup aperti per tutte le sedi selezionate
+  S.mappa.popupOpen={};
+  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
+    S.mappa.popupOpen[s.id]=S.mappa.sediSel.includes(s.id);
+  });
 
   updateMapMarkers();
   renderSidebarCampi();
@@ -793,17 +798,18 @@ function renderMapSediChecks(){
       <div style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${esc(area)}</div>
       ${sediA.map(s=>`
         <div class="sf-campo">
-          <input type="checkbox" id="msc-${s.id}" data-msid="${s.id}" ${S.mappa.sediSel.includes(s.id)?'checked':''}>
+          <input type="checkbox" id="msc-${s.id}" data-msid="${s.id}" ${S.mappa.popupOpen[s.id]?'checked':''}>
           <label for="msc-${s.id}">${esc(s.nome)}</label>
         </div>`).join('')}
     </div>`).join('');
   wrap.querySelectorAll('[data-msid]').forEach(cb=>{
     cb.addEventListener('change',e=>{
       const sid=e.target.dataset.msid;
+      S.mappa.popupOpen[sid]=e.target.checked;
+      // aggiorna anche sediSel per coerenza
       if(e.target.checked){if(!S.mappa.sediSel.includes(sid))S.mappa.sediSel.push(sid);}
       else S.mappa.sediSel=S.mappa.sediSel.filter(x=>x!==sid);
-      // mostra/nascondi popup senza rimuovere marker
-      updatePopupVisibility();
+      applyPopupState(sid);
     });
   });
 }
@@ -812,7 +818,6 @@ function updateMapMarkers(){
   const map=S.mappa.leaflet; if(!map) return;
   const sediConCoord=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng);
   const sediIds=new Set(sediConCoord.map(s=>s.id));
-  // rimuovi marker obsoleti
   Object.keys(S.mappa.markers).forEach(sid=>{
     if(!sediIds.has(sid)){S.mappa.markers[sid].remove();delete S.mappa.markers[sid];}
   });
@@ -820,23 +825,22 @@ function updateMapMarkers(){
   sediConCoord.forEach(sede=>{
     if(!S.mappa.markers[sede.id]){
       const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
-      // NON usare bindPopup — gestiamo il popup manualmente
       const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:300,offset:[0,-5]});
       popup.setContent(buildPopupContent(sede));
       marker.on('click',function(){
-        if(popup.isOpen()){
-          map.closePopup(popup);
-        } else {
-          popup.setLatLng(this.getLatLng()).openOn(map);
-        }
+        // toggle: aggiorna lo stato e sincronizza il checkbox
+        const wasOpen=S.mappa.popupOpen[sede.id]||false;
+        S.mappa.popupOpen[sede.id]=!wasOpen;
+        applyPopupState(sede.id);
+        // aggiorna il checkbox nel pannello
+        const cb=document.getElementById(`msc-${sede.id}`);
+        if(cb) cb.checked=S.mappa.popupOpen[sede.id];
       });
-      // salva riferimento popup nel marker
       marker._popup2=popup;
       S.mappa.markers[sede.id]=marker;
     } else {
-      if(S.mappa.markers[sede.id]._popup2){
+      if(S.mappa.markers[sede.id]._popup2)
         S.mappa.markers[sede.id]._popup2.setContent(buildPopupContent(sede));
-      }
     }
     bounds.push([sede.lat,sede.lng]);
   });
@@ -844,20 +848,29 @@ function updateMapMarkers(){
     map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
     S.mappa._fitted=true;
   }
-  updatePopupVisibility();
+  // applica stato corrente a tutti i marker
+  sediConCoord.forEach(sede=>applyPopupState(sede.id));
+}
+
+function applyPopupState(sid){
+  const map=S.mappa.leaflet; if(!map) return;
+  const marker=S.mappa.markers[sid]; if(!marker||!marker._popup2) return;
+  const shouldOpen=S.mappa.popupOpen[sid]||false;
+  if(shouldOpen){
+    if(!marker._popup2.isOpen())
+      marker._popup2.setLatLng(marker.getLatLng()).openOn(map);
+  } else {
+    if(marker._popup2.isOpen()) map.closePopup(marker._popup2);
+  }
 }
 
 function updatePopupVisibility(){
-  if(!S.mappa.popupWasOpen) S.mappa.popupWasOpen={};
+  // chiamata quando cambia la selezione nel pannello
   const map=S.mappa.leaflet; if(!map) return;
-  Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
-    const popup=marker._popup2; if(!popup) return;
-    if(S.mappa.sediSel.includes(sid)){
-      if(S.mappa.popupWasOpen[sid]) popup.setLatLng(marker.getLatLng()).openOn(map);
-    } else {
-      S.mappa.popupWasOpen[sid]=popup.isOpen();
-      if(popup.isOpen()) map.closePopup(popup);
-    }
+  Object.keys(S.mappa.markers).forEach(sid=>{
+    // il checkbox determina lo stato
+    S.mappa.popupOpen[sid]=S.mappa.sediSel.includes(sid);
+    applyPopupState(sid);
   });
 }
 
