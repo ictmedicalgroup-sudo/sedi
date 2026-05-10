@@ -1,0 +1,1225 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width,initial-scale=1.0"/>
+<title>Gestione Sedi</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --verde:#9DBF60;--grigio:#77797a;--grigio-chiaro:#aaaaaa;
+  --navy:#4A4C4D;--blue:#77797a;--blue-mid:#9DBF60;
+  --blue-light:#D5E3B7;--blue-xlight:#EEF5E3;
+  --accent:#9DBF60;--accent-light:#EEF5E3;
+  --red:#C0392B;--red-light:#FDECEA;
+  --green:#9DBF60;--green-light:#EEF5E3;
+  --g50:#F8F9F8;--g100:#F0F2EE;--g200:#E2E6DF;--g300:#C8CEC4;
+  --g500:#77797a;--g700:#4A4C4D;--g900:#2A2C2D;
+  --sh-sm:0 1px 3px rgba(74,76,77,.08),0 1px 2px rgba(74,76,77,.05);
+  --sh-md:0 4px 12px rgba(74,76,77,.10);
+  --sh-lg:0 12px 32px rgba(74,76,77,.14),0 4px 10px rgba(74,76,77,.07);
+  --r:10px;--rsm:6px;--rlg:16px;
+  font-family:'Raleway',sans-serif;
+}
+body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
+
+/* ── App layout ── */
+#app{display:flex;flex-direction:column;min-height:100vh}
+#topbar{background:#fff;border-bottom:1px solid var(--g200);padding:0 28px;position:sticky;top:0;z-index:200;box-shadow:var(--sh-sm)}
+#tb-top{height:52px;display:flex;align-items:center;justify-content:space-between;border-bottom:1px solid var(--g100)}
+#tb-logo{display:flex;align-items:center}
+#tb-right{display:flex;align-items:center;gap:14px;font-size:13px;color:var(--g500)}
+#tb-user{font-weight:600;color:var(--g700)}
+#tb-nav{height:40px;display:flex;align-items:stretch}
+.tnb{display:flex;align-items:center;gap:6px;padding:0 16px;font-size:12.5px;font-weight:600;color:var(--g500);cursor:pointer;border:none;background:none;font-family:'Raleway',sans-serif;letter-spacing:.3px;border-bottom:2.5px solid transparent;transition:all .17s;text-transform:uppercase}
+.tnb:hover{color:var(--g700);border-bottom-color:var(--g300)}
+.tnb.active{color:var(--verde);border-bottom-color:var(--verde)}
+#main{flex:1;display:flex;flex-direction:column}
+#pb{padding:24px;flex:1}
+
+/* ── Login ── */
+#lp{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--g50)}
+.lcard{background:#fff;border-radius:var(--rlg);padding:38px;width:100%;max-width:420px;box-shadow:0 4px 32px rgba(74,76,77,.10);border:1px solid var(--g200)}
+.llogo{margin-bottom:26px}
+
+/* ── Cards ── */
+.card{background:#fff;border-radius:var(--rlg);box-shadow:var(--sh-sm);border:1px solid var(--g200);overflow:hidden;margin-bottom:20px}
+.ch{padding:15px 20px;border-bottom:1px solid var(--g200);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px}
+.ct{font-size:14px;font-weight:700}
+.cb{padding:20px}
+
+/* ── Buttons ── */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:7px 15px;border-radius:var(--rsm);font-family:'Raleway',sans-serif;font-size:13px;font-weight:600;cursor:pointer;border:none;transition:all .17s;white-space:nowrap}
+.bp{background:var(--blue);color:#fff}.bp:hover{background:var(--navy)}
+.bpg{background:var(--verde);color:#fff}.bpg:hover{background:#7da048}
+.bs{background:var(--g100);color:var(--g700);border:1px solid var(--g200)}.bs:hover{background:var(--g200)}
+.bd{background:var(--red-light);color:var(--red)}.bd:hover{background:var(--red);color:#fff}
+.bsm{padding:4px 10px;font-size:12px}
+.bic{padding:6px;border-radius:var(--rsm);background:var(--g100);border:1px solid var(--g200);cursor:pointer;transition:all .17s;font-size:14px;font-family:'Raleway',sans-serif}.bic:hover{background:var(--g200)}
+
+/* ── Badges ── */
+.bg{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
+.bg-on{background:var(--green-light);color:#1A7A40}.bg-off{background:var(--g100);color:var(--g500)}
+.bg-adm{background:var(--navy);color:#fff}.bg-usr{background:var(--g100);color:var(--g700)}
+
+/* ── Forms ── */
+.fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
+.fl{font-size:11.5px;font-weight:700;color:var(--g700);text-transform:uppercase;letter-spacing:.4px}
+.fi,.fse,.fta{padding:8px 11px;border:1.5px solid var(--g300);border-radius:var(--rsm);font-family:'Raleway',sans-serif;font-size:13.5px;color:var(--g900);background:#fff;outline:none;transition:border-color .17s,box-shadow .17s;width:100%}
+.fi:focus,.fse:focus,.fta:focus{border-color:var(--verde);box-shadow:0 0 0 3px rgba(157,191,96,.15)}
+.fta{resize:vertical;min-height:70px}.fse{cursor:pointer}
+.fr{display:grid;grid-template-columns:1fr 1fr;gap:14px}
+
+/* ── Modal ── */
+.mo{position:fixed;inset:0;background:rgba(74,76,77,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
+.mo.hid{display:none}
+.mb{background:#fff;border-radius:var(--rlg);box-shadow:var(--sh-lg);width:100%;max-width:480px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.mh{padding:18px 20px;border-bottom:1px solid var(--g200);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
+.mt{font-size:15px;font-weight:700}.mbdy{padding:20px;overflow-y:auto;flex:1}.mf{padding:14px 20px;border-top:1px solid var(--g200);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0}
+
+/* ── Misc ── */
+.alert{padding:11px 15px;border-radius:var(--rsm);font-size:13px;display:flex;align-items:flex-start;gap:9px;line-height:1.5}
+.ai{background:var(--blue-xlight);color:var(--navy);border:1px solid var(--blue-light)}
+.ae{background:var(--red-light);color:var(--red);border:1px solid #F5C6C2}
+.emp{text-align:center;padding:44px 20px;color:var(--g500)}
+.emi{font-size:40px;margin-bottom:12px}.emt{font-size:14px;font-weight:600;color:var(--g700)}.ems{font-size:12.5px;margin-top:5px}
+.dt{width:100%;border-collapse:collapse;font-size:13px}
+.dt th{padding:9px 14px;text-align:left;font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;background:var(--g50);border-bottom:2px solid var(--g200)}
+.dt td{padding:10px 14px;border-bottom:1px solid var(--g100);color:var(--g700);vertical-align:middle}
+.dt tr:last-child td{border-bottom:none}.dt tr:hover td{background:var(--g50)}
+.tda{display:flex;gap:6px}.tn{font-weight:600;font-size:13.5px;color:var(--g900)}.ts{font-size:11.5px;color:var(--g500);margin-top:1px}
+::-webkit-scrollbar{width:5px;height:5px}::-webkit-scrollbar-track{background:transparent}::-webkit-scrollbar-thumb{background:var(--g300);border-radius:3px}
+.spn{display:inline-block;width:16px;height:16px;border:2px solid rgba(157,191,96,.3);border-top-color:var(--verde);border-radius:50%;animation:spin .7s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+#toast{position:fixed;bottom:24px;right:24px;background:var(--g900);color:#fff;padding:11px 18px;border-radius:var(--r);font-size:13.5px;font-weight:500;box-shadow:var(--sh-lg);z-index:9999;transform:translateY(60px);opacity:0;transition:all .25s ease;pointer-events:none;max-width:340px;line-height:1.4}
+#toast.show{transform:translateY(0);opacity:1}#toast.tok{background:#1A7A40}#toast.terr{background:var(--red)}
+.hid{display:none!important}
+.fian{animation:fian .25s ease}@keyframes fian{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
+
+/* ── Griglia info ── */
+.griglia-wrap{overflow-x:auto}
+.griglia{border-collapse:collapse;min-width:600px;width:100%;font-size:12.5px}
+.griglia th{padding:8px 12px;background:var(--g50);border:1px solid var(--g200);font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.4px;text-align:center;white-space:nowrap;position:sticky;top:0;z-index:2}
+.griglia th.th-label{text-align:left;min-width:200px;position:sticky;left:0;z-index:3;background:var(--g50)}
+.griglia td{padding:7px 12px;border:1px solid var(--g200);vertical-align:top}
+.griglia td.td-label{background:var(--g50);font-weight:500;color:var(--g700);position:sticky;left:0;z-index:1;min-width:200px}
+.griglia td.td-val{text-align:center;min-width:140px;max-width:200px}
+.griglia td.td-val:hover{background:var(--blue-xlight)}
+.griglia td.td-val.editable{cursor:pointer}
+.griglia-cat-row td{background:var(--navy);color:#fff;font-weight:700;font-size:12px;letter-spacing:.5px;text-transform:uppercase;cursor:pointer;user-select:none}
+.griglia-cat-row td:hover{background:#3a3c3d}
+.griglia-subcat-row td{background:var(--blue-xlight);color:var(--navy);font-weight:600;font-size:11.5px;cursor:pointer;user-select:none}
+.griglia-subcat-row td:hover{background:var(--blue-light)}
+.griglia-campo-row td.td-label{padding-left:28px;font-size:12.5px}
+.inline-edit{width:100%;border:none;background:transparent;font-family:'Raleway',sans-serif;font-size:12.5px;color:var(--g900);outline:none;text-align:center;padding:2px 4px}
+.inline-edit:focus{background:#fff;border-radius:4px;box-shadow:0 0 0 2px var(--verde)}
+.acc-toggle{font-size:11px;margin-right:6px;transition:transform .2s;display:inline-block}
+.acc-toggle.open{}
+.acc-toggle.closed{transform:rotate(-90deg)}
+
+/* ── Filtri barra ── */
+.filters-bar{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+.fi-sm{padding:6px 11px;border:1.5px solid var(--g300);border-radius:var(--rsm);font-family:'Raleway',sans-serif;font-size:13px;color:var(--g900);background:#fff;outline:none}
+.fi-sm:focus{border-color:var(--verde);box-shadow:0 0 0 2px rgba(157,191,96,.15)}
+
+/* ── Multiselect custom ── */
+.ms-wrap{position:relative;display:inline-block}
+.ms-btn{display:flex;align-items:center;gap:6px;padding:6px 11px;border:1.5px solid var(--g300);border-radius:var(--rsm);background:#fff;font-family:'Raleway',sans-serif;font-size:13px;color:var(--g700);cursor:pointer;user-select:none;white-space:nowrap;min-width:160px}
+.ms-btn:hover{border-color:var(--verde)}
+.ms-dropdown{position:absolute;top:calc(100% + 4px);left:0;min-width:220px;background:#fff;border:1.5px solid var(--g300);border-radius:var(--r);box-shadow:var(--sh-md);z-index:300;max-height:300px;overflow-y:auto}
+.ms-area-label{padding:7px 12px 3px;font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;background:var(--g50);border-bottom:1px solid var(--g100)}
+.ms-item{display:flex;align-items:center;gap:8px;padding:7px 12px;cursor:pointer;font-size:13px;color:var(--g700)}
+.ms-item:hover{background:var(--blue-xlight)}
+.ms-item input{accent-color:var(--verde);cursor:pointer}
+.ms-sel-badge{display:inline-flex;align-items:center;background:var(--verde);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px}
+
+/* ── Mappa ── */
+#map-page{display:flex;height:calc(100vh - 93px);gap:0;position:relative}
+#map-container{flex:1;position:relative}
+#map{width:100%;height:100%}
+#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100}
+#map-sidebar.collapsed{width:0}
+#map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px}
+#map-sidebar-toggle{position:absolute;top:50%;right:0;transform:translateY(-50%);z-index:101;background:#fff;border:1px solid var(--g200);border-right:none;border-radius:var(--rsm) 0 0 var(--rsm);padding:10px 5px;cursor:pointer;box-shadow:var(--sh-sm);font-size:12px;color:var(--g500)}
+#map-sidebar-toggle:hover{background:var(--g50)}
+.map-controls{position:absolute;top:12px;left:12px;z-index:100;display:flex;flex-direction:column;gap:8px}
+.map-ctrl-card{background:#fff;border-radius:var(--r);box-shadow:var(--sh-md);padding:10px 14px;min-width:220px}
+.map-ctrl-title{font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
+
+/* Marker popup */
+.lf-popup{min-width:180px;max-width:260px}
+.lf-popup-title{font-weight:700;font-size:14px;color:var(--g900);margin-bottom:6px;font-family:'Raleway',sans-serif}
+.lf-popup-field{display:flex;gap:6px;margin-bottom:3px;font-size:12px;font-family:'Raleway',sans-serif}
+.lf-popup-label{font-weight:600;color:var(--g500);flex-shrink:0}
+.lf-popup-val{color:var(--g700)}
+
+/* sidebar campi check */
+.sf-cat{margin-bottom:10px}
+.sf-cat-title{font-size:11px;font-weight:700;color:var(--g700);text-transform:uppercase;letter-spacing:.5px;padding:5px 0;border-bottom:1px solid var(--g200);margin-bottom:5px;cursor:pointer;display:flex;align-items:center;gap:5px}
+.sf-subcat-title{font-size:11px;font-weight:600;color:var(--g500);padding:3px 0 3px 10px}
+.sf-campo{display:flex;align-items:center;gap:7px;padding:4px 10px;cursor:pointer;border-radius:var(--rsm)}
+.sf-campo:hover{background:var(--g50)}
+.sf-campo input{accent-color:var(--verde)}
+.sf-campo label{font-size:12.5px;color:var(--g700);cursor:pointer}
+
+/* struttura accordion */
+.str-cat{margin-bottom:12px;border:1px solid var(--g200);border-radius:var(--r);overflow:hidden}
+.str-cat-hdr{display:flex;align-items:center;justify-content:space-between;padding:10px 14px;background:var(--g50);cursor:pointer;user-select:none}
+.str-cat-hdr:hover{background:var(--g100)}
+.str-cat-body{padding:10px 14px;border-top:1px solid var(--g200)}
+.str-subcat{margin-bottom:8px;border:1px solid var(--g200);border-radius:var(--rsm);overflow:hidden}
+.str-subcat-hdr{display:flex;align-items:center;justify-content:space-between;padding:7px 12px;background:#fff;cursor:pointer}
+.str-subcat-hdr:hover{background:var(--g50)}
+.str-subcat-body{padding:8px 12px;border-top:1px solid var(--g100);background:#fff}
+.str-campo{display:flex;align-items:center;justify-content:space-between;padding:5px 8px;border-radius:var(--rsm);margin-bottom:3px}
+.str-campo:hover{background:var(--g50)}
+.str-campo-name{font-size:13px;color:var(--g700)}
+
+/* toggle */
+.tw{display:flex;align-items:center;gap:9px;cursor:pointer}
+.tg{position:relative;width:36px;height:20px;flex-shrink:0}
+.tg input{opacity:0;width:0;height:0;position:absolute}
+.tsl{width:36px;height:20px;background:var(--g300);border-radius:10px;transition:background .2s;display:block;cursor:pointer}
+.tsl::after{content:'';position:absolute;top:2px;left:2px;width:16px;height:16px;border-radius:50%;background:#fff;transition:transform .2s;box-shadow:0 1px 3px rgba(0,0,0,.2)}
+input:checked+.tsl{background:var(--verde)}
+input:checked+.tsl::after{transform:translateX(16px)}
+</style>
+</head>
+<body>
+<div id="toast"></div>
+
+<!-- LOGIN -->
+<div id="lp">
+  <div class="lcard">
+    <div class="llogo"><div id="login-logo"></div>
+      <div style="margin-top:14px;font-size:13px;color:var(--grigio);text-align:center">Accesso riservato al personale autorizzato</div>
+    </div>
+    <div id="lerr" class="alert ae hid" style="margin-bottom:14px"></div>
+    <div style="display:flex;flex-direction:column;gap:12px">
+      <div class="fg" style="margin:0"><label class="fl" style="color:var(--grigio);font-size:11px">Username</label>
+        <input class="fi" id="lem" type="email" autocomplete="username" style="background:#EEF5E3;border-color:var(--g200);border-radius:8px"/></div>
+      <div class="fg" style="margin:0"><label class="fl" style="color:var(--grigio);font-size:11px">Password</label>
+        <input class="fi" id="lpw" type="password" autocomplete="current-password" style="background:#EEF5E3;border-color:var(--g200);border-radius:8px"/></div>
+      <button class="btn bpg" id="lbtn" style="width:100%;justify-content:center;padding:11px;font-size:14px;border-radius:8px;margin-top:4px">Accedi</button>
+    </div>
+    <div style="text-align:center;margin-top:18px;font-size:11px;color:var(--grigio-chiaro)">Medical Group · Gestione Sedi</div>
+  </div>
+</div>
+
+<!-- APP -->
+<div id="app" class="hid">
+  <div id="topbar">
+    <div id="tb-top">
+      <div id="tb-logo"></div>
+      <div id="tb-right">
+        <span id="tb-user"></span>
+        <span id="tb-role"></span>
+        <button class="btn bs" style="padding:4px 12px;font-size:12px" id="lout">Esci</button>
+      </div>
+    </div>
+    <nav id="tb-nav"></nav>
+  </div>
+  <main id="main"><div id="pb"></div></main>
+</div>
+
+<!-- MODAL -->
+<div class="mo hid" id="mov">
+  <div class="mb">
+    <div class="mh"><span class="mt" id="mtit">—</span><button class="bic" id="mcls">✕</button></div>
+    <div class="mbdy" id="mbdy"></div>
+    <div class="mf" id="mft"></div>
+  </div>
+</div>
+
+<script>
+'use strict';
+/* ══════════════════════════════════════════
+   CONFIG
+══════════════════════════════════════════ */
+const CFG = {
+  URL: 'https://iczsdqcnvauopwkuspti.supabase.co',  // ← es. https://abcdefgh.supabase.co
+  KEY: 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6ImljenNkcWNudmF1b3B3a3VzcHRpIiwicm9sZSI6ImFub24iLCJpYXQiOjE3NzY4NTQ0MjMsImV4cCI6MjA5MjQzMDQyM30.SmcRHPLM2PEq4Hn-5CQhMyQKoz0PN_0lbN_X3l9MNUE',   // ← chiave anon/public (Settings → API → anon public)
+};
+const T = n => `sedi_${n}`;
+
+/* ══════════════════════════════════════════
+   STATO
+══════════════════════════════════════════ */
+const S = {
+  user: null, token: null,
+  aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
+  page: 'griglia',
+  // filtri griglia
+  griglia: { search: '', catId: '', sediSel: [] },
+  // mappa
+  mappa: { sediSel: [], campiSel: [], search: '', catId: '', subcatId: '', leaflet: null, markers: {} },
+};
+
+/* ══════════════════════════════════════════
+   NAV
+══════════════════════════════════════════ */
+const NAV = [
+  {id:'griglia',   l:'Griglia Info',  ic:'📊', sec:'principale'},
+  {id:'mappa',     l:'Mappa',         ic:'🗺', sec:'principale'},
+  {id:'sedi',      l:'Sedi',          ic:'📍', sec:'gestione', r:['admin']},
+  {id:'struttura', l:'Struttura',     ic:'🗂', sec:'gestione', r:['admin']},
+  {id:'utenti',    l:'Utenti',        ic:'👥', sec:'gestione', r:['admin']},
+  {id:'log',       l:'Log',           ic:'📋', sec:'gestione', r:['admin']},
+];
+
+/* ══════════════════════════════════════════
+   UTILITIES
+══════════════════════════════════════════ */
+const $   = id => document.getElementById(id);
+const esc = s => String(s||'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const uid = () => (crypto.randomUUID ? crypto.randomUUID() : Math.random().toString(36).slice(2,11));
+
+function fmt(d){
+  if(!d) return '—';
+  const dt=typeof d==='string'?new Date(d.length===10?d+'T00:00:00':d):d;
+  return dt.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
+}
+function fmtDt(d){
+  if(!d) return '—';
+  return new Date(d).toLocaleString('it-IT',{day:'2-digit',month:'2-digit',hour:'2-digit',minute:'2-digit'});
+}
+
+let _tid;
+function toast(msg,type='ok'){
+  const el=$('toast'); clearTimeout(_tid);
+  el.textContent=msg; el.className=`show t${type}`;
+  _tid=setTimeout(()=>el.className='',3200);
+}
+
+/* ══════════════════════════════════════════
+   LOGO
+══════════════════════════════════════════ */
+function logoSVG(small){
+  const w=small?28:36,h=small?22:28;
+  return `<svg width="${w}" height="${h}" viewBox="0 0 90 70" fill="none">
+    <circle cx="28" cy="22" r="19" stroke="#D5E3B7" stroke-width="3.5" fill="none"/>
+    <circle cx="40" cy="38" r="24" stroke="#77797A" stroke-width="3.5" fill="none"/>
+  </svg>`;
+}
+function logoHTML(small=false){return `
+  <div style="display:flex;align-items:center;gap:${small?6:10}px">
+    ${logoSVG(small)}
+    <div style="line-height:1.15">
+      <div style="font-weight:300;font-size:${small?11:14}px;letter-spacing:4px;text-transform:uppercase">
+        <span style="color:var(--grigio)">MEDICAL</span><span style="color:var(--verde)">GROUP</span>
+      </div>
+      <div style="font-size:9px;letter-spacing:2px;color:var(--grigio-chiaro);text-transform:uppercase;font-weight:500">Gestione Sedi</div>
+    </div>
+  </div>`;}
+document.addEventListener('DOMContentLoaded',()=>{
+  const tl=$('tb-logo'); if(tl) tl.innerHTML=logoHTML(true);
+  const ll=$('login-logo'); if(ll) ll.innerHTML=logoHTML(false);
+});
+
+/* ══════════════════════════════════════════
+   SUPABASE REST
+══════════════════════════════════════════ */
+async function db(method,table,opts={}){
+  const {flt='',body=null,sel='*',ord='',lim=''}=opts;
+  let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
+  if(flt) url+=`&${flt}`;
+  if(ord) url+=`&order=${ord}`;
+  if(lim) url+=`&limit=${lim}`;
+  const headers={'apikey':CFG.KEY,'Authorization':`Bearer ${S.token||CFG.KEY}`,'Content-Type':'application/json',
+    'Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''};
+  const res=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined});
+  if(!res.ok){const e=await res.text();throw new Error(`${method} ${table}: ${e}`);}
+  return method==='DELETE'?null:res.json();
+}
+async function supaLogin(email,password){
+  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=password`,{method:'POST',
+    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},body:JSON.stringify({email,password})});
+  const data=await res.json();
+  if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
+  return data;
+}
+async function supaLogout(){
+  try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
+}
+async function logAct(azione,dettaglio){
+  try{await db('POST',T('log'),{body:{utente_id:S.user?.id,azione,dettaglio}});}catch(e){}
+}
+
+/* ══════════════════════════════════════════
+   CARICAMENTO DATI
+══════════════════════════════════════════ */
+async function loadAll(){
+  const [aree,sedi,categorie,sottocategorie,campi,valori,profili,log]=await Promise.all([
+    db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('categorie'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('sottocategorie'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('campi'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('valori')),
+    db('GET',T('profili'),{ord:'cognome.asc'}),
+    db('GET',T('log'),{ord:'created_at.desc',lim:'200'}),
+  ]);
+  S.aree=aree||[];S.sedi=sedi||[];S.categorie=categorie||[];
+  S.sottocategorie=sottocategorie||[];S.campi=campi||[];
+  S.valori=valori||[];S.profili=profili||[];S.log=log||[];
+  // init sedi sel default (tutte)
+  if(!S.griglia.sediSel.length) S.griglia.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
+  if(!S.mappa.sediSel.length)   S.mappa.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
+}
+
+function getValore(sedeId,campoId){
+  return S.valori.find(v=>v.sede_id===sedeId&&v.campo_id===campoId)?.valore||'';
+}
+
+/* ══════════════════════════════════════════
+   SIDEBAR / TOPBAR
+══════════════════════════════════════════ */
+function renderSidebar(){
+  const items=NAV.filter(n=>!n.r||n.r.includes(S.user?.ruolo));
+  $('tb-nav').innerHTML=items.map(n=>`
+    <button class="tnb${S.page===n.id?' active':''}" data-pg="${n.id}">
+      <span>${n.ic}</span>${n.l}
+    </button>`).join('');
+  $('tb-nav').querySelectorAll('.tnb').forEach(b=>b.addEventListener('click',()=>goPage(b.dataset.pg)));
+  $('tb-user').textContent=S.user?`${S.user.nome} ${S.user.cognome}`:'';
+  $('tb-role').innerHTML=S.user?`<span class="bg ${S.user.ruolo==='admin'?'bg-adm':'bg-usr'}">${S.user.ruolo==='admin'?'Admin':'Utente'}</span>`:'';
+}
+function goPage(pg){
+  S.page=pg; renderSidebar(); renderPage();
+}
+function renderPage(){
+  const pb=$('pb');
+  pb.innerHTML=`<div style="padding:50px;text-align:center"><span class="spn" style="width:28px;height:28px"></span></div>`;
+  if     (S.page==='griglia')   renderGriglia(pb);
+  else if(S.page==='mappa')     renderMappa(pb);
+  else if(S.page==='sedi')      renderSediPage(pb);
+  else if(S.page==='struttura') renderStruttura(pb);
+  else if(S.page==='utenti')    renderUtenti(pb);
+  else if(S.page==='log')       renderLog(pb);
+}
+
+/* ══════════════════════════════════════════
+   MULTISELECT SEDI (componente riusabile)
+══════════════════════════════════════════ */
+function buildMultiSel(id,selIds,onChange){
+  // raggruppa sedi per area
+  const perArea={};
+  S.sedi.filter(s=>s.attiva).forEach(s=>{
+    const area=S.aree.find(a=>a.id===s.area_id)?.nome||'Altra area';
+    if(!perArea[area]) perArea[area]=[];
+    perArea[area].push(s);
+  });
+  const sel=selIds;
+  const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+    sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
+
+  const wrapper=document.createElement('div');
+  wrapper.className='ms-wrap';
+  wrapper.id=`ms-wrap-${id}`;
+  wrapper.innerHTML=`
+    <div class="ms-btn" id="ms-btn-${id}">
+      <span>📍</span><span id="ms-lbl-${id}">${label()}</span>
+      ${sel.length>0&&sel.length<S.sedi.filter(s=>s.attiva).length?`<span class="ms-sel-badge">${sel.length}</span>`:''}
+      <span style="margin-left:auto;font-size:10px">▼</span>
+    </div>
+    <div class="ms-dropdown hid" id="ms-dd-${id}">
+      <div class="ms-item" id="ms-all-${id}">
+        <input type="checkbox" id="ms-chk-all-${id}" ${sel.length===S.sedi.filter(s=>s.attiva).length?'checked':''}>
+        <label for="ms-chk-all-${id}" style="font-weight:600">Tutte le sedi</label>
+      </div>
+      ${Object.entries(perArea).map(([area,sediArea])=>`
+        <div class="ms-area-label">${area}</div>
+        ${sediArea.map(s=>`
+          <div class="ms-item">
+            <input type="checkbox" id="ms-chk-${id}-${s.id}" data-sid="${s.id}" ${sel.includes(s.id)?'checked':''}>
+            <label for="ms-chk-${id}-${s.id}">${esc(s.nome)}</label>
+          </div>`).join('')}
+      `).join('')}
+    </div>`;
+
+  // toggle dropdown
+  wrapper.querySelector(`#ms-btn-${id}`).addEventListener('click',e=>{
+    e.stopPropagation();
+    const dd=wrapper.querySelector(`#ms-dd-${id}`);
+    dd.classList.toggle('hid');
+  });
+  document.addEventListener('click',()=>{
+    wrapper.querySelector(`#ms-dd-${id}`)?.classList.add('hid');
+  });
+
+  // "tutte"
+  wrapper.querySelector(`#ms-chk-all-${id}`).addEventListener('change',e=>{
+    const checked=e.target.checked;
+    wrapper.querySelectorAll(`[data-sid]`).forEach(cb=>cb.checked=checked);
+    sel.length=0;
+    if(checked) S.sedi.filter(s=>s.attiva).forEach(s=>sel.push(s.id));
+    updateLabel();
+    onChange([...sel]);
+  });
+  // singola sede
+  wrapper.querySelectorAll('[data-sid]').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      const sid=e.target.dataset.sid;
+      if(e.target.checked){if(!sel.includes(sid)) sel.push(sid);}
+      else{const i=sel.indexOf(sid);if(i>-1)sel.splice(i,1);}
+      wrapper.querySelector(`#ms-chk-all-${id}`).checked=sel.length===S.sedi.filter(s=>s.attiva).length;
+      updateLabel();
+      onChange([...sel]);
+    });
+  });
+  function updateLabel(){
+    const lbl=wrapper.querySelector(`#ms-lbl-${id}`);
+    if(lbl) lbl.textContent=sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+      sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
+    const badge=wrapper.querySelector('.ms-sel-badge');
+    if(badge){if(sel.length>0&&sel.length<S.sedi.filter(s=>s.attiva).length) badge.textContent=sel.length; else badge.textContent='';}
+  }
+  return wrapper;
+}
+
+/* ══════════════════════════════════════════
+   PAGINA GRIGLIA
+══════════════════════════════════════════ */
+function renderGriglia(pb){
+  const isAdm=S.user?.ruolo==='admin';
+  pb.innerHTML=`<div class="fian">
+    <div class="filters-bar" id="gf-bar">
+      <input class="fi-sm" id="gf-search" placeholder="🔍 Cerca..." value="${esc(S.griglia.search)}" style="width:200px"/>
+      <select class="fi-sm" id="gf-cat">
+        <option value="">Tutte le categorie</option>
+        ${S.categorie.map(c=>`<option value="${c.id}"${S.griglia.catId===c.id?' selected':''}>${esc(c.nome)}</option>`).join('')}
+      </select>
+      <div id="gf-sedi-wrap"></div>
+      ${isAdm?`<button class="btn bpg bsm" id="gf-add-col">+ Aggiungi sede</button>`:''}
+    </div>
+    <div class="card" style="overflow:hidden">
+      <div class="griglia-wrap" id="griglia-wrap"></div>
+    </div>
+  </div>`;
+
+  // multiselect sedi
+  const msEl=buildMultiSel('griglia',S.griglia.sediSel,ids=>{
+    S.griglia.sediSel=[...ids]; renderGrigliaTable();
+  });
+  $('gf-sedi-wrap').appendChild(msEl);
+
+  $('gf-search').addEventListener('input',e=>{S.griglia.search=e.target.value;renderGrigliaTable();});
+  $('gf-cat').addEventListener('change',e=>{S.griglia.catId=e.target.value;renderGrigliaTable();});
+  if(isAdm) $('gf-add-col')?.addEventListener('click',()=>openSedeModal(null));
+
+  renderGrigliaTable();
+}
+
+function renderGrigliaTable(){
+  const wrap=$('griglia-wrap');
+  if(!wrap) return;
+  const isAdm=S.user?.ruolo==='admin';
+  const {search,catId,sediSel}=S.griglia;
+  const sediVis=S.sedi.filter(s=>s.attiva&&sediSel.includes(s.id));
+  const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
+
+  // stato accordion (persiste in S)
+  if(!S.griglia.acc) S.griglia.acc={};
+  const acc=S.griglia.acc;
+
+  let html=`<table class="griglia">
+    <thead><tr>
+      <th class="th-label">Informazione</th>
+      ${sediVis.map(s=>`<th title="${esc(s.indirizzo||'')}">
+        <div>${esc(s.nome)}</div>
+        <div style="font-size:9px;font-weight:400;color:var(--g500)">${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'')}</div>
+      </th>`).join('')}
+    </tr></thead><tbody>`;
+
+  catsVis.forEach(cat=>{
+    // filtra sottocategorie e campi per search
+    const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id).filter(sc=>{
+      if(!search) return true;
+      // controlla se almeno un campo/valore corrisponde
+      const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id);
+      return sc.nome.toLowerCase().includes(search.toLowerCase())||
+        campiSc.some(c=>c.nome.toLowerCase().includes(search.toLowerCase())||
+          sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase())));
+    });
+    if(!subcats.length&&search) return;
+
+    const catOpen=acc[cat.id]!==false; // default aperto
+    html+=`<tr class="griglia-cat-row" data-acc-cat="${cat.id}">
+      <td colspan="${sediVis.length+1}">
+        <span class="acc-toggle ${catOpen?'open':'closed'}" id="acc-ic-cat-${cat.id}">▼</span>
+        ${esc(cat.icona||'')} ${esc(cat.nome)}
+        ${isAdm?`<span style="float:right;font-size:11px;opacity:.6;font-weight:400">click per espandere/comprimere</span>`:''}
+      </td>
+    </tr>`;
+
+    if(catOpen){
+      subcats.forEach(sc=>{
+        const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id).filter(c=>{
+          if(!search) return true;
+          return c.nome.toLowerCase().includes(search.toLowerCase())||
+            sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase()));
+        });
+        if(!campiSc.length&&search) return;
+
+        const scOpen=acc[sc.id]!==false;
+        html+=`<tr class="griglia-subcat-row" data-acc-sc="${sc.id}">
+          <td colspan="${sediVis.length+1}" style="padding-left:18px">
+            <span class="acc-toggle ${scOpen?'open':'closed'}" id="acc-ic-sc-${sc.id}">▼</span>
+            ${esc(sc.nome)}
+          </td>
+        </tr>`;
+
+        if(scOpen){
+          campiSc.forEach(campo=>{
+            html+=`<tr class="griglia-campo-row">
+              <td class="td-label">${esc(campo.nome)}</td>
+              ${sediVis.map(s=>{
+                const val=getValore(s.id,campo.id);
+                const highlighted=search&&val.toLowerCase().includes(search.toLowerCase())
+                  ?val.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(val);
+                return `<td class="td-val${isAdm?' editable':''}" data-sede="${s.id}" data-campo="${campo.id}">
+                  ${isAdm
+                    ?`<input class="inline-edit" value="${esc(val)}" data-sede="${s.id}" data-campo="${campo.id}" placeholder="—"/>`
+                    :`<span>${val?highlighted:'<span style="color:var(--g300)">—</span>'}</span>`}
+                </td>`;
+              }).join('')}
+            </tr>`;
+          });
+        }
+      });
+    }
+  });
+
+  html+=`</tbody></table>`;
+  wrap.innerHTML=html;
+
+  // accordion click
+  wrap.querySelectorAll('[data-acc-cat]').forEach(row=>{
+    row.addEventListener('click',()=>{
+      const catId=row.dataset.accCat;
+      acc[catId]=acc[catId]===false?true:false;
+      renderGrigliaTable();
+    });
+  });
+  wrap.querySelectorAll('[data-acc-sc]').forEach(row=>{
+    row.addEventListener('click',()=>{
+      const scId=row.dataset.accSc;
+      acc[scId]=acc[scId]===false?true:false;
+      renderGrigliaTable();
+    });
+  });
+
+  // inline edit
+  if(isAdm){
+    wrap.querySelectorAll('.inline-edit').forEach(input=>{
+      input.addEventListener('click',e=>e.stopPropagation());
+      input.addEventListener('change',async e=>{
+        const sedeId=e.target.dataset.sede,campoId=e.target.dataset.campo,valore=e.target.value.trim();
+        try{
+          const existing=S.valori.find(v=>v.sede_id===sedeId&&v.campo_id===campoId);
+          if(existing){
+            await db('PATCH',T('valori'),{flt:`id=eq.${existing.id}`,body:{valore}});
+            existing.valore=valore;
+          }else{
+            const [nv]=await db('POST',T('valori'),{body:{sede_id:sedeId,campo_id:campoId,valore}});
+            S.valori.push(nv);
+          }
+          toast('Salvato ✅');
+        }catch(err){toast(err.message,'err');}
+      });
+    });
+  }
+}
+
+/* ══════════════════════════════════════════
+   PAGINA MAPPA
+══════════════════════════════════════════ */
+function renderMappa(pb){
+  pb.style.padding='0';
+  pb.innerHTML=`<div id="map-page">
+    <div id="map-container">
+      <div class="map-controls">
+        <div class="map-ctrl-card">
+          <div class="map-ctrl-title">🗺 Filtra sedi</div>
+          <div id="map-sedi-wrap"></div>
+        </div>
+      </div>
+      <div id="map"></div>
+    </div>
+    <div id="map-sidebar">
+      <button id="map-sidebar-toggle" title="Mostra/nascondi pannello">◀</button>
+      <div id="map-sidebar-inner">
+        <div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:12px">📌 Campi da mostrare nei popup</div>
+        <input class="fi-sm" id="map-sf-search" placeholder="🔍 Cerca campo..." style="width:100%;margin-bottom:10px"/>
+        <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
+          <select class="fi-sm" id="map-sf-cat" style="flex:1">
+            <option value="">Tutte le categorie</option>
+            ${S.categorie.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}
+          </select>
+        </div>
+        <div id="map-sf-campi"></div>
+      </div>
+    </div>
+  </div>`;
+
+  // sidebar toggle
+  $('map-sidebar-toggle').addEventListener('click',()=>{
+    const sb=$('map-sidebar'),tog=$('map-sidebar-toggle');
+    const collapsed=sb.classList.toggle('collapsed');
+    tog.textContent=collapsed?'▶':'◀';
+    setTimeout(()=>S.mappa.leaflet?.invalidateSize(),320);
+  });
+
+  // multiselect sedi
+  const msEl=buildMultiSel('mappa',S.mappa.sediSel,ids=>{
+    S.mappa.sediSel=[...ids]; updateMapMarkers();
+  });
+  $('map-sedi-wrap').appendChild(msEl);
+
+  // Leaflet init
+  const map=L.map('map',{center:[43.5,11.0],zoom:8,zoomControl:true});
+  S.mappa.leaflet=map;
+  L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{
+    attribution:'© <a href="https://www.openstreetmap.org">OpenStreetMap</a>',maxZoom:19
+  }).addTo(map);
+
+  // marker verde
+  const greenIcon=L.divIcon({
+    html:`<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:var(--verde);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);transform:rotate(-45deg)"></div>`,
+    iconSize:[28,28],iconAnchor:[14,28],popupAnchor:[0,-32],className:''
+  });
+  S.mappa._icon=greenIcon;
+  S.mappa.markers={};
+
+  updateMapMarkers();
+  renderSidebarCampi();
+
+  // filtri sidebar
+  $('map-sf-search').addEventListener('input',renderSidebarCampi);
+  $('map-sf-cat').addEventListener('change',renderSidebarCampi);
+}
+
+function updateMapMarkers(){
+  const map=S.mappa.leaflet;
+  if(!map) return;
+  // rimuovi tutti
+  Object.values(S.mappa.markers).forEach(m=>m.remove());
+  S.mappa.markers={};
+
+  const sediVis=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng&&S.mappa.sediSel.includes(s.id));
+  const bounds=[];
+  sediVis.forEach(sede=>{
+    const popup=buildPopupContent(sede);
+    const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon})
+      .addTo(map)
+      .bindPopup(popup,{maxWidth:280,className:'lf-popup-wrap'});
+    S.mappa.markers[sede.id]=marker;
+    bounds.push([sede.lat,sede.lng]);
+  });
+  if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+}
+
+function buildPopupContent(sede){
+  const campiSel=S.mappa.campiSel;
+  let rows='';
+  campiSel.forEach(campoId=>{
+    const campo=S.campi.find(c=>c.id===campoId);
+    const val=getValore(sede.id,campoId);
+    if(!campo||(!val&&val!=='0')) return;
+    rows+=`<div class="lf-popup-field"><span class="lf-popup-label">${esc(campo.nome)}:</span><span class="lf-popup-val">${esc(val)}</span></div>`;
+  });
+  const area=S.aree.find(a=>a.id===sede.area_id)?.nome||'';
+  return `<div class="lf-popup">
+    <div class="lf-popup-title">${esc(sede.nome)}</div>
+    ${area?`<div style="font-size:11px;color:var(--g500);margin-bottom:6px">${esc(area)}</div>`:''}
+    ${sede.indirizzo?`<div style="font-size:11px;color:var(--g700);margin-bottom:6px">📍 ${esc(sede.indirizzo)}</div>`:''}
+    ${rows||'<div style="font-size:12px;color:var(--g500);font-style:italic">Nessun campo selezionato</div>'}
+  </div>`;
+}
+
+function renderSidebarCampi(){
+  const search=($('map-sf-search')?.value||'').toLowerCase();
+  const catId=$('map-sf-cat')?.value||'';
+  const wrap=$('map-sf-campi');
+  if(!wrap) return;
+
+  const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
+  let html='';
+  catsVis.forEach(cat=>{
+    const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id);
+    const campiCat=[];
+    subcats.forEach(sc=>{
+      S.campi.filter(c=>c.sottocategoria_id===sc.id&&(!search||c.nome.toLowerCase().includes(search)||sc.nome.toLowerCase().includes(search))).forEach(c=>campiCat.push({campo:c,sc}));
+    });
+    if(!campiCat.length) return;
+    html+=`<div class="sf-cat">
+      <div class="sf-cat-title"><span>${cat.icona||'📁'}</span>${esc(cat.nome)}</div>`;
+    let lastSc='';
+    campiCat.forEach(({campo,sc})=>{
+      if(sc.id!==lastSc){
+        html+=`<div class="sf-subcat-title">${esc(sc.nome)}</div>`;
+        lastSc=sc.id;
+      }
+      const checked=S.mappa.campiSel.includes(campo.id);
+      html+=`<div class="sf-campo">
+        <input type="checkbox" id="sf-${campo.id}" data-campo="${campo.id}" ${checked?'checked':''}>
+        <label for="sf-${campo.id}">${esc(campo.nome)}</label>
+      </div>`;
+    });
+    html+=`</div>`;
+  });
+  wrap.innerHTML=html||`<div class="emp" style="padding:20px"><div class="ems">Nessun campo trovato</div></div>`;
+
+  wrap.querySelectorAll('[data-campo]').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      const cid=e.target.dataset.campo;
+      if(e.target.checked){if(!S.mappa.campiSel.includes(cid)) S.mappa.campiSel.push(cid);}
+      else{S.mappa.campiSel=S.mappa.campiSel.filter(x=>x!==cid);}
+      // aggiorna popup aperti
+      Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
+        const sede=S.sedi.find(s=>s.id===sid);
+        if(sede) marker.setPopupContent(buildPopupContent(sede));
+      });
+    });
+  });
+}
+
+/* ══════════════════════════════════════════
+   PAGINA SEDI (CRUD)
+══════════════════════════════════════════ */
+function renderSediPage(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch">
+      <span class="ct">📍 Sedi (${S.sedi.length})</span>
+      <button class="btn bpg bsm" id="s-add">+ Nuova sede</button>
+    </div>
+    ${!S.sedi.length?`<div class="emp"><div class="emi">📍</div><div class="emt">Nessuna sede</div></div>`:
+    `<table class="dt"><thead><tr><th>Nome</th><th>Area</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
+    ${S.sedi.map(s=>`<tr>
+      <td><div class="tn">${esc(s.nome)}</div></td>
+      <td>${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'—')}</td>
+      <td>${esc(s.indirizzo||'—')}</td>
+      <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
+      <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
+      <td><div class="tda">
+        <button class="btn bs bsm" data-se="${s.id}">✏</button>
+        <button class="btn bd bsm" data-sd="${s.id}">🗑</button>
+      </div></td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div></div>`;
+  $('s-add').addEventListener('click',()=>openSedeModal(null));
+  pb.querySelectorAll('[data-se]').forEach(b=>b.addEventListener('click',()=>openSedeModal(S.sedi.find(x=>x.id===b.dataset.se))));
+  pb.querySelectorAll('[data-sd]').forEach(b=>b.addEventListener('click',()=>{
+    const s=S.sedi.find(x=>x.id===b.dataset.sd);
+    openConf(`Eliminare la sede "${s?.nome}"? Tutti i valori associati verranno eliminati.`,async()=>{
+      await db('DELETE',T('sedi'),{flt:`id=eq.${b.dataset.sd}`});
+      S.sedi=S.sedi.filter(x=>x.id!==b.dataset.sd);
+      renderPage(); toast('Sede eliminata');
+    });
+  }));
+}
+
+function openSedeModal(sede){
+  const body=`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="sm-nome" value="${esc(sede?.nome||'')}"/></div>
+    <div class="fg"><div class="fl">Area</div>
+      <select class="fse" id="sm-area">
+        <option value="">— Nessuna area —</option>
+        ${S.aree.map(a=>`<option value="${a.id}"${sede?.area_id===a.id?' selected':''}>${esc(a.nome)}</option>`).join('')}
+      </select></div>
+    <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="sm-ind" value="${esc(sede?.indirizzo||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Latitudine</div><input class="fi" id="sm-lat" type="number" step="0.0001" value="${sede?.lat||''}" placeholder="es. 43.7228"/></div>
+      <div class="fg"><div class="fl">Longitudine</div><input class="fi" id="sm-lng" type="number" step="0.0001" value="${sede?.lng||''}" placeholder="es. 10.9021"/></div>
+    </div>
+    <div class="alert ai" style="font-size:12px">💡 Le coordinate si trovano su Google Maps: tasto destro sulla sede → "Cosa c'è qui?"</div>
+    <div class="fg" style="margin-top:12px">
+      <label class="tw">
+        <div class="tg"><input type="checkbox" id="sm-att" ${sede?.attiva!==false?'checked':''}><span class="tsl"></span></div>
+        <span class="fl" style="margin:0">Sede attiva</span>
+      </label></div>`;
+  openM(sede?'✏ Modifica sede':'+ Nuova sede',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('sm-nome').value.trim(),area=$('sm-area').value,ind=$('sm-ind').value.trim();
+      const lat=parseFloat($('sm-lat').value)||null,lng=parseFloat($('sm-lng').value)||null;
+      const attiva=$('sm-att').checked;
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      try{
+        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva};
+        if(sede){
+          await db('PATCH',T('sedi'),{flt:`id=eq.${sede.id}`,body:payload});
+          S.sedi=S.sedi.map(s=>s.id===sede.id?{...s,...payload}:s);
+        }else{
+          const [ns]=await db('POST',T('sedi'),{body:payload}); S.sedi.push(ns);
+          logAct('sede_create',`Nuova sede: ${nome}`);
+        }
+        closeM(); renderPage(); toast(sede?'Sede aggiornata':'Sede aggiunta ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+}
+
+/* ══════════════════════════════════════════
+   PAGINA STRUTTURA (aree + categorie + sottocategorie + campi)
+══════════════════════════════════════════ */
+function renderStruttura(pb){
+  pb.innerHTML=`<div class="fian" style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+    <!-- AREE -->
+    <div class="card">
+      <div class="ch"><span class="ct">🌍 Aree geografiche</span><button class="btn bpg bsm" id="ar-add">+ Area</button></div>
+      <div id="aree-body">
+        ${!S.aree.length?`<div class="emp"><div class="emi">🌍</div><div class="emt">Nessuna area</div></div>`:
+        `<table class="dt"><thead><tr><th>Nome</th><th>Azioni</th></tr></thead><tbody>
+        ${S.aree.map(a=>`<tr>
+          <td class="tn">${esc(a.nome)}</td>
+          <td><div class="tda">
+            <button class="btn bs bsm" data-ae="${a.id}">✏</button>
+            <button class="btn bd bsm" data-ad="${a.id}">🗑</button>
+          </div></td>
+        </tr>`).join('')}
+        </tbody></table>`}
+      </div>
+    </div>
+    <!-- STRUTTURA CATEGORIE/SOTTOCATEGORIE/CAMPI -->
+    <div style="grid-column:1/-1">
+    <div class="card">
+      <div class="ch"><span class="ct">🗂 Struttura informazioni</span><button class="btn bpg bsm" id="cat-add">+ Categoria</button></div>
+      <div class="cb" id="str-body">${buildStrutturaHTML()}</div>
+    </div>
+    </div>
+  </div>`;
+
+  $('ar-add').addEventListener('click',()=>openAreaModal(null));
+  pb.querySelectorAll('[data-ae]').forEach(b=>b.addEventListener('click',()=>openAreaModal(S.aree.find(x=>x.id===b.dataset.ae))));
+  pb.querySelectorAll('[data-ad]').forEach(b=>b.addEventListener('click',()=>{
+    const a=S.aree.find(x=>x.id===b.dataset.ad);
+    openConf(`Eliminare l'area "${a?.nome}"?`,async()=>{
+      await db('DELETE',T('aree'),{flt:`id=eq.${b.dataset.ad}`});
+      S.aree=S.aree.filter(x=>x.id!==b.dataset.ad); renderPage(); toast('Area eliminata');
+    });
+  }));
+  $('cat-add').addEventListener('click',()=>openCatModal(null));
+  bindStrutturaEvents(pb);
+}
+
+function buildStrutturaHTML(){
+  if(!S.categorie.length) return `<div class="emp"><div class="emi">🗂</div><div class="emt">Nessuna categoria</div><div class="ems">Aggiungi categorie per strutturare le informazioni</div></div>`;
+  return S.categorie.map(cat=>`
+    <div class="str-cat">
+      <div class="str-cat-hdr">
+        <div style="display:flex;align-items:center;gap:8px">
+          <span style="font-size:18px">${cat.icona||'📁'}</span>
+          <span style="font-weight:700;color:var(--g900)">${esc(cat.nome)}</span>
+        </div>
+        <div class="tda">
+          <button class="btn bpg bsm" data-sc-add="${cat.id}">+ Sottocategoria</button>
+          <button class="btn bs bsm" data-ce="${cat.id}">✏</button>
+          <button class="btn bd bsm" data-cd="${cat.id}">🗑</button>
+        </div>
+      </div>
+      <div class="str-cat-body">
+        ${S.sottocategorie.filter(sc=>sc.categoria_id===cat.id).map(sc=>`
+          <div class="str-subcat">
+            <div class="str-subcat-hdr">
+              <span style="font-weight:600;color:var(--g700)">${esc(sc.nome)}</span>
+              <div class="tda">
+                <button class="btn bpg bsm" data-c-add="${sc.id}">+ Campo</button>
+                <button class="btn bs bsm" data-sce="${sc.id}">✏</button>
+                <button class="btn bd bsm" data-scd="${sc.id}">🗑</button>
+              </div>
+            </div>
+            <div class="str-subcat-body">
+              ${S.campi.filter(c=>c.sottocategoria_id===sc.id).map(c=>`
+                <div class="str-campo">
+                  <span class="str-campo-name">• ${esc(c.nome)}</span>
+                  <div class="tda">
+                    <button class="btn bs bsm" data-cfe="${c.id}">✏</button>
+                    <button class="btn bd bsm" data-cfd="${c.id}">🗑</button>
+                  </div>
+                </div>`).join('')||`<div style="font-size:12px;color:var(--g400);padding:6px 0">Nessun campo — aggiungi campi per raccogliere informazioni</div>`}
+            </div>
+          </div>`).join('')||`<div style="font-size:12px;color:var(--g400);padding:4px 0">Nessuna sottocategoria</div>`}
+      </div>
+    </div>`).join('');
+}
+
+function bindStrutturaEvents(pb){
+  const rebind=()=>{
+    const sb=$('str-body'); if(!sb) return;
+    sb.querySelectorAll('[data-ce]').forEach(b=>b.addEventListener('click',()=>openCatModal(S.categorie.find(x=>x.id===b.dataset.ce))));
+    sb.querySelectorAll('[data-cd]').forEach(b=>b.addEventListener('click',()=>{
+      const c=S.categorie.find(x=>x.id===b.dataset.cd);
+      openConf(`Eliminare la categoria "${c?.nome}"? Tutte le sottocategorie e i campi verranno eliminati.`,async()=>{
+        await db('DELETE',T('categorie'),{flt:`id=eq.${b.dataset.cd}`});
+        S.categorie=S.categorie.filter(x=>x.id!==b.dataset.cd);
+        S.sottocategorie=S.sottocategorie.filter(x=>x.categoria_id!==b.dataset.cd);
+        refreshStruttura(); toast('Categoria eliminata');
+      });
+    }));
+    sb.querySelectorAll('[data-sc-add]').forEach(b=>b.addEventListener('click',()=>openSubcatModal(null,b.dataset.scAdd)));
+    sb.querySelectorAll('[data-sce]').forEach(b=>b.addEventListener('click',()=>openSubcatModal(S.sottocategorie.find(x=>x.id===b.dataset.sce),null)));
+    sb.querySelectorAll('[data-scd]').forEach(b=>b.addEventListener('click',()=>{
+      const sc=S.sottocategorie.find(x=>x.id===b.dataset.scd);
+      openConf(`Eliminare la sottocategoria "${sc?.nome}"? Tutti i campi verranno eliminati.`,async()=>{
+        await db('DELETE',T('sottocategorie'),{flt:`id=eq.${b.dataset.scd}`});
+        S.sottocategorie=S.sottocategorie.filter(x=>x.id!==b.dataset.scd);
+        S.campi=S.campi.filter(x=>x.sottocategoria_id!==b.dataset.scd);
+        refreshStruttura(); toast('Sottocategoria eliminata');
+      });
+    }));
+    sb.querySelectorAll('[data-c-add]').forEach(b=>b.addEventListener('click',()=>openCampoModal(null,b.dataset.cAdd)));
+    sb.querySelectorAll('[data-cfe]').forEach(b=>b.addEventListener('click',()=>openCampoModal(S.campi.find(x=>x.id===b.dataset.cfe),null)));
+    sb.querySelectorAll('[data-cfd]').forEach(b=>b.addEventListener('click',()=>{
+      const c=S.campi.find(x=>x.id===b.dataset.cfd);
+      openConf(`Eliminare il campo "${c?.nome}"? Tutti i valori associati verranno eliminati.`,async()=>{
+        await db('DELETE',T('campi'),{flt:`id=eq.${b.dataset.cfd}`});
+        S.campi=S.campi.filter(x=>x.id!==b.dataset.cfd);
+        refreshStruttura(); toast('Campo eliminato');
+      });
+    }));
+  };
+  rebind();
+  // salva rebind per uso successivo
+  pb._rebindStr=rebind;
+}
+
+function refreshStruttura(){
+  const sb=$('str-body'); if(!sb) return;
+  sb.innerHTML=buildStrutturaHTML();
+  // re-bind
+  const pb=$('pb'); if(pb?._rebindStr) pb._rebindStr();
+  else bindStrutturaEvents(pb);
+}
+
+function openAreaModal(area){
+  openM(area?'✏ Modifica area':'+ Nuova area',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="ar-nome" value="${esc(area?.nome||'')}"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('ar-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
+    if(area){await db('PATCH',T('aree'),{flt:`id=eq.${area.id}`,body:{nome}});S.aree=S.aree.map(a=>a.id===area.id?{...a,nome}:a);}
+    else{const[na]=await db('POST',T('aree'),{body:{nome,ordine:S.aree.length}});S.aree.push(na);}
+    closeM();renderPage();toast(area?'Area aggiornata':'Area aggiunta ✅');
+  }}]);
+}
+
+function openCatModal(cat){
+  openM(cat?'✏ Modifica categoria':'+ Nuova categoria',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="ct-nome" value="${esc(cat?.nome||'')}"/></div>
+    <div class="fg"><div class="fl">Icona (emoji)</div><input class="fi" id="ct-ico" value="${esc(cat?.icona||'📁')}" style="width:80px"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('ct-nome').value.trim(),icona=$('ct-ico').value.trim()||'📁';
+    if(!nome){toast('Nome obbligatorio','err');return;}
+    if(cat){await db('PATCH',T('categorie'),{flt:`id=eq.${cat.id}`,body:{nome,icona}});S.categorie=S.categorie.map(c=>c.id===cat.id?{...c,nome,icona}:c);}
+    else{const[nc]=await db('POST',T('categorie'),{body:{nome,icona,ordine:S.categorie.length}});S.categorie.push(nc);}
+    closeM();refreshStruttura();toast(cat?'Categoria aggiornata':'Categoria aggiunta ✅');
+  }}]);
+}
+
+function openSubcatModal(sc,catId){
+  const cid=catId||(sc?.categoria_id);
+  openM(sc?'✏ Modifica sottocategoria':'+ Nuova sottocategoria',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="sc-nome" value="${esc(sc?.nome||'')}"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('sc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
+    if(sc){await db('PATCH',T('sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome}});S.sottocategorie=S.sottocategorie.map(x=>x.id===sc.id?{...x,nome}:x);}
+    else{const[ns]=await db('POST',T('sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.sottocategorie.filter(x=>x.categoria_id===cid).length}});S.sottocategorie.push(ns);}
+    closeM();refreshStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
+  }}]);
+}
+
+function openCampoModal(campo,subcatId){
+  const sid=subcatId||(campo?.sottocategoria_id);
+  openM(campo?'✏ Modifica campo':'+ Nuovo campo',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="cf-nome" value="${esc(campo?.nome||'')}"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('cf-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
+    if(campo){await db('PATCH',T('campi'),{flt:`id=eq.${campo.id}`,body:{nome}});S.campi=S.campi.map(x=>x.id===campo.id?{...x,nome}:x);}
+    else{const[nc]=await db('POST',T('campi'),{body:{nome,sottocategoria_id:sid,ordine:S.campi.filter(x=>x.sottocategoria_id===sid).length}});S.campi.push(nc);}
+    closeM();refreshStruttura();toast(campo?'Campo aggiornato':'Campo aggiunto ✅');
+  }}]);
+}
+
+/* ══════════════════════════════════════════
+   PAGINA UTENTI
+══════════════════════════════════════════ */
+function renderUtenti(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch"><span class="ct">👥 Utenti (${S.profili.length})</span>
+      <button class="btn bpg bsm" id="u-add">+ Nuovo utente</button></div>
+    ${!S.profili.length?`<div class="emp"><div class="emi">👥</div><div class="emt">Nessun utente</div></div>`:
+    `<table class="dt"><thead><tr><th>Utente</th><th>Ruolo</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
+    ${S.profili.map(u=>`<tr>
+      <td><div class="tn">${esc(u.cognome+' '+u.nome)}</div><div class="ts">${esc(u.email)}</div></td>
+      <td><span class="bg ${u.ruolo==='admin'?'bg-adm':'bg-usr'}">${u.ruolo==='admin'?'Admin':'Utente'}</span></td>
+      <td><span class="bg ${u.attivo?'bg-on':'bg-off'}">${u.attivo?'● Attivo':'○ Inattivo'}</span></td>
+      <td><div class="tda">
+        <button class="btn bs bsm" data-ue="${u.id}">✏</button>
+        ${u.id!==S.user?.id?`<button class="btn bd bsm" data-ud="${u.id}">🗑</button>`:''}
+      </div></td>
+    </tr>`).join('')}
+    </tbody></table>`}
+  </div></div>`;
+  $('u-add').addEventListener('click',()=>openUtenteModal(null));
+  pb.querySelectorAll('[data-ue]').forEach(b=>b.addEventListener('click',()=>openUtenteModal(S.profili.find(x=>x.id===b.dataset.ue))));
+  pb.querySelectorAll('[data-ud]').forEach(b=>b.addEventListener('click',()=>{
+    const u=S.profili.find(x=>x.id===b.dataset.ud);
+    openConf(`Eliminare l'utente "${u?.nome} ${u?.cognome}"?`,async()=>{
+      await db('DELETE',T('profili'),{flt:`id=eq.${b.dataset.ud}`});
+      S.profili=S.profili.filter(x=>x.id!==b.dataset.ud); renderPage(); toast('Utente eliminato');
+    });
+  }));
+}
+
+function openUtenteModal(u){
+  const body=`
+    <div class="fr">
+      <div class="fg"><div class="fl">Nome *</div><input class="fi" id="un" value="${esc(u?.nome||'')}"/></div>
+      <div class="fg"><div class="fl">Cognome *</div><input class="fi" id="ucg" value="${esc(u?.cognome||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">Email *</div><input class="fi" id="ue" type="email" value="${esc(u?.email||'')}"/></div>
+    ${!u?`<div class="fg"><div class="fl">Password *</div><input class="fi" id="upw" type="password" placeholder="Minimo 6 caratteri"/></div>`:''}
+    <div class="fg"><div class="fl">Ruolo</div>
+      <select class="fse" id="ur">
+        <option value="utente"${u?.ruolo==='utente'?' selected':''}>Utente (solo lettura)</option>
+        <option value="admin"${u?.ruolo==='admin'?' selected':''}>Admin (lettura + scrittura)</option>
+      </select></div>
+    <div class="fg"><label class="tw">
+      <div class="tg"><input type="checkbox" id="ua" ${u?.attivo!==false?'checked':''}><span class="tsl"></span></div>
+      <span class="fl" style="margin:0">Utente attivo</span>
+    </label></div>`;
+  openM(u?'✏ Modifica utente':'+ Nuovo utente',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('un').value.trim(),cog=$('ucg').value.trim(),email=$('ue').value.trim();
+      const ruolo=$('ur').value,attivo=$('ua').checked;
+      if(!nome||!cog||!email){toast('Compila tutti i campi obbligatori','err');return;}
+      try{
+        if(u){
+          await db('PATCH',T('profili'),{flt:`id=eq.${u.id}`,body:{nome,cognome:cog,email,ruolo,attivo}});
+          S.profili=S.profili.map(x=>x.id===u.id?{...x,nome,cognome:cog,email,ruolo,attivo}:x);
+        }else{
+          // creazione utente via Edge Function (come negli altri tool)
+          const pwd=$('upw')?.value||'';
+          if(pwd.length<6){toast('Password minimo 6 caratteri','err');return;}
+          const nid=uid();
+          await db('POST',T('profili'),{body:{id:nid,nome,cognome:cog,email,ruolo,attivo}});
+          S.profili.push({id:nid,nome,cognome:cog,email,ruolo,attivo});
+          logAct('utente_create',`Nuovo utente: ${nome} ${cog}`);
+        }
+        closeM();renderPage();toast(u?'Utente aggiornato':'Utente aggiunto ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+}
+
+/* ══════════════════════════════════════════
+   PAGINA LOG
+══════════════════════════════════════════ */
+function renderLog(pb){
+  let logPage=0,logQ='';
+  const PAGE=15;
+  const render=()=>{
+    const fl=S.log.filter(l=>{
+      if(!logQ) return true;
+      const q=logQ.toLowerCase();
+      return (l.azione||'').toLowerCase().includes(q)||(l.dettaglio||'').toLowerCase().includes(q);
+    });
+    const tot=fl.length,pages=Math.max(1,Math.ceil(tot/PAGE));
+    if(logPage>=pages) logPage=pages-1;
+    const slice=fl.slice(logPage*PAGE,(logPage+1)*PAGE);
+    $('log-count').textContent=`${tot} eventi`;
+    $('log-entries').innerHTML=!slice.length
+      ?`<div class="emp"><div class="emi">📋</div><div class="emt">Nessun risultato</div></div>`
+      :slice.map(l=>`<div style="display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--g100);align-items:flex-start">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📌</div>
+          <div>
+            <div style="font-size:10.5px;color:var(--g500);font-family:monospace;margin-bottom:2px">${fmtDt(l.created_at)}</div>
+            <div style="font-size:13px;color:var(--g700)">${esc(String(l.dettaglio||l.azione||''))}</div>
+          </div>
+        </div>`).join('');
+    $('log-pag').innerHTML=pages<=1?'':
+      `<div style="display:flex;align-items:center;gap:8px;margin-top:14px;justify-content:center">
+        <button class="bic" id="log-prev" ${logPage===0?'disabled style="opacity:.4"':''}>◀</button>
+        <span style="font-size:13px;color:var(--g500)">${logPage+1} / ${pages}</span>
+        <button class="bic" id="log-next" ${logPage>=pages-1?'disabled style="opacity:.4"':''}>▶</button>
+      </div>`;
+    $('log-prev')?.addEventListener('click',()=>{logPage--;render();});
+    $('log-next')?.addEventListener('click',()=>{logPage++;render();});
+  };
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch"><span class="ct">📋 Log</span>
+      <div style="display:flex;gap:9px;align-items:center">
+        <span id="log-count" style="font-size:12px;color:var(--g500)"></span>
+        <input class="fi-sm" id="log-search" style="width:220px" placeholder="🔍 Cerca…"/>
+      </div>
+    </div>
+    <div class="cb"><div id="log-entries"></div><div id="log-pag"></div></div>
+  </div></div>`;
+  render();
+  $('log-search').addEventListener('input',e=>{logQ=e.target.value;logPage=0;render();});
+}
+
+/* ══════════════════════════════════════════
+   MODAL
+══════════════════════════════════════════ */
+function openM(title,body,btns=[]){
+  $('mtit').textContent=title;
+  $('mbdy').innerHTML=body;
+  $('mft').innerHTML=btns.map((b,i)=>`<button class="btn ${b.c}" id="mb${i}">${b.l}</button>`).join('');
+  btns.forEach((b,i)=>$(`mb${i}`).addEventListener('click',b.a));
+  $('mov').classList.remove('hid');
+}
+function closeM(){$('mov').classList.add('hid');}
+function openConf(msg,onOk){
+  openM('⚠ Conferma',`<p style="color:var(--g700);font-size:13.5px;line-height:1.6">${esc(msg)}</p>`,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Conferma',c:'bd',a:async()=>{await onOk();closeM();}},
+  ]);
+}
+$('mcls').addEventListener('click',closeM);
+$('mov').addEventListener('click',e=>{if(e.target===$('mov'))closeM();});
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();});
+
+/* ══════════════════════════════════════════
+   AUTH
+══════════════════════════════════════════ */
+async function doLogin(){
+  const email=$('lem').value.trim(),pwd=$('lpw').value;
+  const btn=$('lbtn'),err=$('lerr');
+  err.classList.add('hid');
+  btn.innerHTML='<span class="spn"></span> Accesso…'; btn.disabled=true;
+  try{
+    const auth=await supaLogin(email,pwd);
+    S.token=auth.access_token;
+    const [profilo]=await db('GET',T('profili'),{flt:`id=eq.${auth.user.id}`});
+    if(!profilo) throw new Error('Profilo non trovato. Contatta l\'amministratore.');
+    S.user=profilo;
+    await loadAll();
+    $('lp').classList.add('hid'); $('app').classList.remove('hid');
+    renderSidebar(); goPage('griglia');
+    logAct('login','Accesso effettuato');
+    toast(`Benvenuto, ${S.user.nome}! ✅`);
+  }catch(e){
+    err.innerHTML=`⚠ ${esc(e.message)}`; err.classList.remove('hid');
+    btn.innerHTML='Accedi'; btn.disabled=false;
+  }
+}
+async function doLogout(){
+  await supaLogout();
+  S.user=null;S.token=null;
+  $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
+}
+$('lbtn').addEventListener('click',doLogin);
+$('lem').addEventListener('keydown',e=>{if(e.key==='Enter')$('lpw').focus();});
+$('lpw').addEventListener('keydown',e=>{if(e.key==='Enter')doLogin();});
+$('lout').addEventListener('click',()=>openConf('Uscire dall\'applicazione?',doLogout));
+$('lem').focus();
+</script>
+</body>
+</html>
