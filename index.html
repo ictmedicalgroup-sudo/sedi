@@ -141,15 +141,23 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 #map-page{display:flex;height:calc(100vh - 93px);position:relative;overflow:hidden}
 #map-container{flex:1;position:relative;min-width:0}
 #map{width:100%;height:100%}
-#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100}
+#map-sidebar{
+  width:340px;flex-shrink:0;background:#fff;
+  border-left:1px solid var(--g200);
+  display:flex;flex-direction:column;
+  overflow:hidden;transition:width .3s ease;z-index:100;
+}
 #map-sidebar.collapsed{width:0}
 #map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px}
+/* toggle: posizionato assoluto in map-page, animato con right */
 #map-sidebar-toggle{
   position:absolute;top:50%;right:340px;transform:translateY(-50%);
-  z-index:201;background:#fff;border:1px solid var(--g200);
-  border-right:none;border-radius:var(--rsm) 0 0 var(--rsm);
-  padding:12px 6px;cursor:pointer;box-shadow:var(--sh-sm);
-  font-size:13px;color:var(--g500);transition:right .3s ease;line-height:1;
+  z-index:201;background:#fff;
+  border:1px solid var(--g200);border-right:none;
+  border-radius:var(--rsm) 0 0 var(--rsm);
+  padding:14px 7px;cursor:pointer;box-shadow:var(--sh-sm);
+  font-size:14px;color:var(--g500);
+  transition:right .3s ease;line-height:1;user-select:none;
 }
 #map-sidebar-toggle:hover{background:var(--g50);color:var(--verde)}
 .map-controls{position:absolute;top:12px;left:12px;z-index:100;display:flex;flex-direction:column;gap:8px}
@@ -409,6 +417,57 @@ function renderPage(){
 }
 
 /* ══════════════════════════════════════════
+   MULTISELECT CATEGORIE
+══════════════════════════════════════════ */
+function buildMultiSelCat(id,selIds,onChange){
+  const all=S.categorie;
+  const sel=[...selIds];
+  const label=()=>sel.length===0?'Tutte le categorie':`${sel.length} categorie`;
+  const wrapper=document.createElement('div');
+  wrapper.className='ms-wrap';
+  wrapper.id=`ms-wrap-${id}`;
+  wrapper.innerHTML=`
+    <div class="ms-btn" id="ms-btn-${id}">
+      <span>🗂</span><span id="ms-lbl-${id}">${label()}</span>
+      <span style="margin-left:auto;font-size:10px">▼</span>
+    </div>
+    <div class="ms-dropdown hid" id="ms-dd-${id}">
+      <div class="ms-item" id="ms-all-${id}">
+        <input type="checkbox" id="ms-chk-all-${id}" ${sel.length===0?'checked':''}>
+        <label for="ms-chk-all-${id}" style="font-weight:600">Tutte le categorie</label>
+      </div>
+      ${all.map(c=>`
+        <div class="ms-item">
+          <input type="checkbox" id="ms-chk-${id}-${c.id}" data-cid="${c.id}" ${sel.includes(c.id)?'checked':''}>
+          <label for="ms-chk-${id}-${c.id}">${c.icona||'📁'} ${esc(c.nome)}</label>
+        </div>`).join('')}
+    </div>`;
+  wrapper.querySelector(`#ms-btn-${id}`).addEventListener('click',e=>{
+    e.stopPropagation();
+    wrapper.querySelector(`#ms-dd-${id}`).classList.toggle('hid');
+  });
+  document.addEventListener('click',()=>wrapper.querySelector(`#ms-dd-${id}`)?.classList.add('hid'));
+  wrapper.querySelector(`#ms-chk-all-${id}`).addEventListener('change',e=>{
+    const checked=e.target.checked;
+    wrapper.querySelectorAll('[data-cid]').forEach(cb=>cb.checked=checked);
+    sel.length=0;
+    wrapper.querySelector(`#ms-lbl-${id}`).textContent=label();
+    onChange([...sel]);
+  });
+  wrapper.querySelectorAll('[data-cid]').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      const cid=e.target.dataset.cid;
+      if(e.target.checked){if(!sel.includes(cid))sel.push(cid);}
+      else{const i=sel.indexOf(cid);if(i>-1)sel.splice(i,1);}
+      wrapper.querySelector(`#ms-chk-all-${id}`).checked=sel.length===0;
+      wrapper.querySelector(`#ms-lbl-${id}`).textContent=label();
+      onChange([...sel]);
+    });
+  });
+  return wrapper;
+}
+
+/* ══════════════════════════════════════════
    MULTISELECT SEDI (componente riusabile)
 ══════════════════════════════════════════ */
 function buildMultiSel(id,selIds,onChange){
@@ -495,12 +554,9 @@ function renderGriglia(pb){
   pb.innerHTML=`<div class="fian">
     <div class="filters-bar" id="gf-bar">
       <input class="fi-sm" id="gf-search" placeholder="🔍 Cerca..." value="${esc(S.griglia.search)}" style="width:200px"/>
-      <select class="fi-sm" id="gf-cat" multiple size="${Math.min(S.categorie.length+1,5)}" style="min-width:160px">
-        <option value="" selected>Tutte le categorie</option>
-        ${S.categorie.map(c=>`<option value="${c.id}">${esc(c.icona||'')} ${esc(c.nome)}</option>`).join('')}
-      </select>
+      <div id="gf-cat-wrap"></div>
       <div id="gf-sedi-wrap"></div>
-      ${isAdm?`<button class="btn bpg bsm" id="gf-add-col">+ Aggiungi sede</button>`:''}
+
     </div>
     <div class="card" style="overflow:hidden">
       <div class="griglia-wrap" id="griglia-wrap"></div>
@@ -514,11 +570,12 @@ function renderGriglia(pb){
   $('gf-sedi-wrap').appendChild(msEl);
 
   $('gf-search').addEventListener('input',e=>{S.griglia.search=e.target.value;renderGrigliaTable();});
-  $('gf-cat').addEventListener('change',e=>{
-    const sel=[...e.target.selectedOptions].map(o=>o.value).filter(v=>v!=='');
-    S.griglia.catIds=sel; renderGrigliaTable();
+  // multiselect categorie
+  const mcEl=buildMultiSelCat('griglia-cat',S.griglia.catIds,ids=>{
+    S.griglia.catIds=[...ids]; renderGrigliaTable();
   });
-  if(isAdm) $('gf-add-col')?.addEventListener('click',()=>openSedeModal(null));
+  $('gf-cat-wrap').appendChild(mcEl);
+
 
   renderGrigliaTable();
 }
@@ -669,15 +726,15 @@ function renderMappa(pb){
 
   // sidebar toggle
   const tog=$('map-sidebar-toggle');
-  tog.addEventListener('click',()=>{
+  let _sbOpen=true;
+  function setSbState(open){
+    _sbOpen=open;
     const sb=$('map-sidebar');
-    const collapsed=sb.classList.toggle('collapsed');
-    tog.textContent=collapsed?'▶':'◀';
-    tog.style.right=collapsed?'0':'340px';
-    tog.style.borderRadius=collapsed?'var(--rsm)':'var(--rsm) 0 0 var(--rsm)';
-    tog.style.borderRight=collapsed?'1px solid var(--g200)':'none';
+    if(open){sb.classList.remove('collapsed');tog.style.right='340px';tog.style.borderRight='none';tog.style.borderRadius='var(--rsm) 0 0 var(--rsm)';tog.textContent='◀';}
+    else{sb.classList.add('collapsed');tog.style.right='0';tog.style.borderRight='1px solid var(--g200)';tog.style.borderRadius='var(--rsm)';tog.textContent='▶';}
     setTimeout(()=>S.mappa.leaflet?.invalidateSize(),320);
-  });
+  }
+  tog.addEventListener('click',()=>setSbState(!_sbOpen));
 
   // sedi checkboxes nel pannello
   renderMapSediChecks();
@@ -752,28 +809,24 @@ function renderMapSediChecks(){
 
 function updateMapMarkers(){
   const map=S.mappa.leaflet; if(!map) return;
-  // rimuovi solo i marker non più presenti (sede eliminata o senza coordinate)
   const sediConCoord=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng);
   const sediIds=new Set(sediConCoord.map(s=>s.id));
   // rimuovi marker obsoleti
   Object.keys(S.mappa.markers).forEach(sid=>{
     if(!sediIds.has(sid)){S.mappa.markers[sid].remove();delete S.mappa.markers[sid];}
   });
-  // aggiungi nuovi marker
   const bounds=[];
   sediConCoord.forEach(sede=>{
     if(!S.mappa.markers[sede.id]){
       const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
-      const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:300})
-        .setContent(buildPopupContent(sede));
-      marker.bindPopup(popup);
-      marker.on('click',()=>{
-        if(marker.isPopupOpen()) marker.closePopup();
-        else marker.openPopup();
+      marker.bindPopup(buildPopupContent(sede),{autoClose:false,closeOnClick:false,maxWidth:300});
+      // toggle popup al click
+      marker.on('click',function(){
+        if(this.isPopupOpen()) this.closePopup();
+        else this.openPopup();
       });
       S.mappa.markers[sede.id]=marker;
     } else {
-      // aggiorna contenuto popup per sede già presente
       S.mappa.markers[sede.id].setPopupContent(buildPopupContent(sede));
     }
     bounds.push([sede.lat,sede.lng]);
@@ -786,16 +839,14 @@ function updateMapMarkers(){
 }
 
 function updatePopupVisibility(){
-  // popup visibile solo per le sedi selezionate nel filtro
+  if(!S.mappa.popupWasOpen) S.mappa.popupWasOpen={};
   Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
     if(S.mappa.sediSel.includes(sid)){
-      // apri popup se era aperto prima o se è la prima volta (aperto di default)
-      if(S.mappa.popupWasOpen&&S.mappa.popupWasOpen[sid]) marker.openPopup();
+      // se era aperto prima di essere deselezionato, riaprilo
+      if(S.mappa.popupWasOpen[sid]) marker.openPopup();
     } else {
-      // salva stato e chiudi
-      if(!S.mappa.popupWasOpen) S.mappa.popupWasOpen={};
       S.mappa.popupWasOpen[sid]=marker.isPopupOpen();
-      if(marker.isPopupOpen()) marker.closePopup();
+      marker.closePopup();
     }
   });
 }
@@ -1276,7 +1327,7 @@ function openConf(msg,onOk){
 }
 $('mcls').addEventListener('click',closeM);
 $('mov').addEventListener('click',e=>{if(e.target===$('mov'))closeM();});
-document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();}); 
+document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();});
 
 /* ══════════════════════════════════════════
    AUTH
