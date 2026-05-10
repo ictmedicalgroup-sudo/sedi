@@ -522,18 +522,12 @@ function renderGrigliaTable(){
   if(!S.griglia.acc) S.griglia.acc={};
   const acc=S.griglia.acc;
 
-  // Struttura: per ogni sede, una colonna. Per ogni cat→subcat→campo, una riga con il valore.
-  // La sottocategoria diventa header di sezione. Il campo è la label di riga (chiave).
-  // Come richiesto al punto 6: riga sottocategoria = intestazione chiave sulle colonne (campo.nome).
-  // Interpretiamo: la griglia mantiene campi come righe (chiave) e sedi come colonne,
-  // con categoria e sottocategoria come header di gruppo espandibili.
-
   let html=`<table class="griglia">
     <thead><tr>
-      <th class="th-label">Categoria / Chiave</th>
+      <th class="th-label">CATEGORIA / CHIAVE</th>
       ${sediVis.map(s=>`<th>
-        <div style="font-weight:700">${esc(s.nome)}</div>
-        <div style="font-size:9px;font-weight:400;color:var(--g500)">${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'')}</div>
+        <div style="font-weight:700;font-size:12px">${esc(s.nome)}</div>
+        <div style="font-size:9px;font-weight:400;color:var(--g500);text-transform:uppercase;letter-spacing:.3px">${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'')}</div>
       </th>`).join('')}
     </tr></thead><tbody>`;
 
@@ -556,49 +550,46 @@ function renderGrigliaTable(){
       </td>
     </tr>`;
 
-    if(catOpen){
-      subcats.forEach(sc=>{
-        const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id).filter(c=>{
-          if(!search) return true;
-          return c.nome.toLowerCase().includes(search.toLowerCase())||
-            sc.nome.toLowerCase().includes(search.toLowerCase())||
-            sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase()));
-        });
-        if(!campiSc.length&&search) return;
+    if(!catOpen) return;
 
-        const scOpen=acc[sc.id]!==false;
-        // riga sottocategoria: mostra il nome sc + per ogni campo una sub-intestazione
-        html+=`<tr class="griglia-subcat-row" data-acc-sc="${sc.id}">
-          <td colspan="${sediVis.length+1}" style="padding-left:18px">
-            <span class="acc-toggle ${scOpen?'open':'closed'}">▼</span>
-            ${esc(sc.nome)}
-          </td>
-        </tr>`;
-
-        if(scOpen){
-          // sotto la sottocategoria: ogni campo è una riga (chiave = campo.nome)
-          campiSc.forEach(campo=>{
-            const hl=search&&campo.nome.toLowerCase().includes(search.toLowerCase())
-              ?campo.nome.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(campo.nome);
-            html+=`<tr class="griglia-campo-row">
-              <td class="td-label" style="padding-left:32px">
-                <span style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.3px">${hl}</span>
-              </td>
-              ${sediVis.map(s=>{
-                const val=getValore(s.id,campo.id);
-                const highlighted=search&&val.toLowerCase().includes(search.toLowerCase())
-                  ?val.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(val);
-                return `<td class="td-val${isAdm?' editable':''}" data-sede="${s.id}" data-campo="${campo.id}">
-                  ${isAdm
-                    ?`<input class="inline-edit" value="${esc(val)}" data-sede="${s.id}" data-campo="${campo.id}" placeholder="—"/>`
-                    :`<span>${val?highlighted:'<span style="color:var(--g300)">—</span>'}</span>`}
-                </td>`;
-              }).join('')}
-            </tr>`;
-          });
-        }
+    subcats.forEach(sc=>{
+      const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id).filter(c=>{
+        if(!search) return true;
+        return c.nome.toLowerCase().includes(search.toLowerCase())||
+          sc.nome.toLowerCase().includes(search.toLowerCase())||
+          sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase()));
       });
-    }
+      if(!campiSc.length&&search) return;
+
+      const scOpen=acc[sc.id]!==false;
+      html+=`<tr class="griglia-subcat-row" data-acc-sc="${sc.id}">
+        <td colspan="${sediVis.length+1}" style="padding-left:18px">
+          <span class="acc-toggle ${scOpen?'open':'closed'}">▼</span>
+          ${esc(sc.nome)}
+        </td>
+      </tr>`;
+
+      if(!scOpen) return;
+
+      // una riga per ogni campo (chiave), valori nelle colonne sedi
+      campiSc.forEach(campo=>{
+        const hl=search&&campo.nome.toLowerCase().includes(search.toLowerCase())
+          ?campo.nome.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(campo.nome);
+        html+=`<tr class="griglia-campo-row">
+          <td class="td-label" style="padding-left:32px">${hl}</td>
+          ${sediVis.map(s=>{
+            const val=getValore(s.id,campo.id);
+            const highlighted=search&&val.toLowerCase().includes(search.toLowerCase())
+              ?val.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(val);
+            return `<td class="td-val${isAdm?' editable':''}" data-sede="${s.id}" data-campo="${campo.id}">
+              ${isAdm
+                ?`<input class="inline-edit" value="${esc(val)}" data-sede="${s.id}" data-campo="${campo.id}" placeholder="—"/>`
+                :`<span>${val?highlighted:'<span style="color:var(--g300)">—</span>'}</span>`}
+            </td>`;
+          }).join('')}
+        </tr>`;
+      });
+    });
   });
 
   html+=`</tbody></table>`;
@@ -717,9 +708,8 @@ function renderMappa(pb){
 
 function renderMapSediChecks(){
   const wrap=$('map-sedi-checks'); if(!wrap) return;
-  // raggruppa per area
   const perArea={};
-  S.sedi.filter(s=>s.attiva).forEach(s=>{
+  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
     const a=S.aree.find(x=>x.id===s.area_id)?.nome||'Altra area';
     if(!perArea[a]) perArea[a]=[];
     perArea[a].push(s);
@@ -738,38 +728,60 @@ function renderMapSediChecks(){
       const sid=e.target.dataset.msid;
       if(e.target.checked){if(!S.mappa.sediSel.includes(sid))S.mappa.sediSel.push(sid);}
       else S.mappa.sediSel=S.mappa.sediSel.filter(x=>x!==sid);
-      updateMapMarkers();
+      // mostra/nascondi popup senza rimuovere marker
+      updatePopupVisibility();
     });
   });
 }
 
 function updateMapMarkers(){
   const map=S.mappa.leaflet; if(!map) return;
-  Object.values(S.mappa.markers).forEach(m=>m.remove());
-  S.mappa.markers={};
-  S.mappa.popupOpen={};
-
-  const sediVis=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng&&S.mappa.sediSel.includes(s.id));
+  // rimuovi solo i marker non più presenti (sede eliminata o senza coordinate)
+  const sediConCoord=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng);
+  const sediIds=new Set(sediConCoord.map(s=>s.id));
+  // rimuovi marker obsoleti
+  Object.keys(S.mappa.markers).forEach(sid=>{
+    if(!sediIds.has(sid)){S.mappa.markers[sid].remove();delete S.mappa.markers[sid];}
+  });
+  // aggiungi nuovi marker
   const bounds=[];
-  sediVis.forEach(sede=>{
-    const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
-    // popup persistente (non si chiude cliccando altrove)
-    const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:280})
-      .setContent(buildPopupContent(sede));
-    marker.bindPopup(popup);
-    // toggle: click sul marker apre/chiude il popup di quella sede
-    marker.on('click',()=>{
-      if(marker.isPopupOpen()) marker.closePopup();
-      else marker.openPopup();
-    });
-    S.mappa.markers[sede.id]=marker;
+  sediConCoord.forEach(sede=>{
+    if(!S.mappa.markers[sede.id]){
+      const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
+      const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:300})
+        .setContent(buildPopupContent(sede));
+      marker.bindPopup(popup);
+      marker.on('click',()=>{
+        if(marker.isPopupOpen()) marker.closePopup();
+        else marker.openPopup();
+      });
+      S.mappa.markers[sede.id]=marker;
+    }
     bounds.push([sede.lat,sede.lng]);
   });
-  if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+  if(bounds.length&&Object.keys(S.mappa.markers).length===sediConCoord.length){
+    // solo al primo caricamento
+    if(!S.mappa._fitted){map.fitBounds(bounds,{padding:[40,40],maxZoom:12});S.mappa._fitted=true;}
+  }
+  updatePopupVisibility();
+}
+
+function updatePopupVisibility(){
+  // popup visibile solo per le sedi selezionate nel filtro
+  Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
+    if(S.mappa.sediSel.includes(sid)){
+      // apri popup se era aperto prima o se è la prima volta (aperto di default)
+      if(S.mappa.popupWasOpen&&S.mappa.popupWasOpen[sid]) marker.openPopup();
+    } else {
+      // salva stato e chiudi
+      if(!S.mappa.popupWasOpen) S.mappa.popupWasOpen={};
+      S.mappa.popupWasOpen[sid]=marker.isPopupOpen();
+      if(marker.isPopupOpen()) marker.closePopup();
+    }
+  });
 }
 
 function refreshPopups(){
-  // aggiorna contenuto di tutti i popup aperti senza chiuderli
   Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
     const sede=S.sedi.find(s=>s.id===sid);
     if(sede) marker.setPopupContent(buildPopupContent(sede));
@@ -779,24 +791,27 @@ function refreshPopups(){
 function buildPopupContent(sede){
   const campiSel=S.mappa.campiSel;
   let rows='';
-  // raggruppa per sottocategoria per leggibilità
-  const scIds=[...new Set(campiSel.map(cid=>S.campi.find(c=>c.id===cid)?.sottocategoria_id).filter(Boolean))];
-  scIds.forEach(scId=>{
-    const sc=S.sottocategorie.find(x=>x.id===scId);
-    const campiSc=campiSel.filter(cid=>{const c=S.campi.find(x=>x.id===cid);return c?.sottocategoria_id===scId;});
-    const righe=campiSc.map(cid=>{
-      const campo=S.campi.find(c=>c.id===cid);
-      const val=getValore(sede.id,cid);
-      if(!campo) return '';
-      return `<div class="lf-popup-field"><span class="lf-popup-label">${esc(campo.nome)}:</span><span class="lf-popup-val">${val?esc(val):'<em style="color:var(--g300)">—</em>'}</span></div>`;
-    }).join('');
-    if(righe) rows+=`<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">${esc(sc?.nome||'')}</div>${righe}</div>`;
+  // raggruppa per CATEGORIA (come in figura)
+  S.categorie.forEach(cat=>{
+    const subcatsDiCat=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id);
+    let catRows='';
+    subcatsDiCat.forEach(sc=>{
+      const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id&&campiSel.includes(c.id));
+      campiSc.forEach(campo=>{
+        const val=getValore(sede.id,campo.id);
+        catRows+=`<div style="display:flex;align-items:baseline;gap:4px;margin-bottom:2px">
+          <span style="color:var(--g500);font-size:11px;min-width:6px">–</span>
+          <span style="font-size:12px;color:var(--g700)">${val?esc(val):'<em style="color:var(--g300)">—</em>'}</span>
+        </div>`;
+      });
+    });
+    if(catRows) rows+=`<div style="margin-bottom:7px">
+      <div style="font-size:11px;font-weight:700;color:var(--g900);margin-bottom:3px">${esc(cat.nome)}</div>
+      ${catRows}
+    </div>`;
   });
-  const area=S.aree.find(a=>a.id===sede.area_id)?.nome||'';
   return `<div class="lf-popup">
     <div class="lf-popup-title">${esc(sede.nome)}</div>
-    ${area?`<div style="font-size:11px;color:var(--g500);margin-bottom:4px">${esc(area)}</div>`:''}
-    ${sede.indirizzo?`<div style="font-size:11px;color:var(--g700);margin-bottom:6px">📍 ${esc(sede.indirizzo)}</div>`:''}
     ${rows||'<div style="font-size:12px;color:var(--g500);font-style:italic">Seleziona campi dal pannello →</div>'}
   </div>`;
 }
