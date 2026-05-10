@@ -418,6 +418,7 @@ function renderPage(){
 
 /* ══════════════════════════════════════════
    MULTISELECT CATEGORIE
+
 ══════════════════════════════════════════ */
 function buildMultiSelCat(id,selIds,onChange){
   const all=S.categorie;
@@ -893,6 +894,7 @@ function renderSidebarCampi(){
   const wrap=$('map-sf-campi'); if(!wrap) return;
 
   const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
+  let html='';
   catsVis.forEach(cat=>{
     const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id&&(!subcatId||sc.id===subcatId));
     const campiCat=[];
