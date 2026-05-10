@@ -141,10 +141,10 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 #map-page{display:flex;height:calc(100vh - 93px);gap:0;position:relative}
 #map-container{flex:1;position:relative}
 #map{width:100%;height:100%}
-#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100}
+#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100;position:relative}
 #map-sidebar.collapsed{width:0}
 #map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px}
-#map-sidebar-toggle{position:absolute;top:50%;right:0;transform:translateY(-50%);z-index:101;background:#fff;border:1px solid var(--g200);border-right:none;border-radius:var(--rsm) 0 0 var(--rsm);padding:10px 5px;cursor:pointer;box-shadow:var(--sh-sm);font-size:12px;color:var(--g500)}
+#map-sidebar-toggle{position:absolute;top:50%;right:-28px;transform:translateY(-50%);z-index:201;background:#fff;border:1px solid var(--g200);border-left:none;border-radius:0 var(--rsm) var(--rsm) 0;padding:10px 6px;cursor:pointer;box-shadow:var(--sh-sm);font-size:12px;color:var(--g500);white-space:nowrap}
 #map-sidebar-toggle:hover{background:var(--g50)}
 .map-controls{position:absolute;top:12px;left:12px;z-index:100;display:flex;flex-direction:column;gap:8px}
 .map-ctrl-card{background:#fff;border-radius:var(--r);box-shadow:var(--sh-md);padding:10px 14px;min-width:220px}
@@ -263,7 +263,7 @@ const S = {
    NAV
 ══════════════════════════════════════════ */
 const NAV = [
-  {id:'griglia',   l:'Griglia Info',  ic:'📊', sec:'principale'},
+  {id:'griglia',   l:'Informazioni',  ic:'📊', sec:'principale'},
   {id:'mappa',     l:'Mappa',         ic:'🗺', sec:'principale'},
   {id:'sedi',      l:'Sedi',          ic:'📍', sec:'gestione', r:['admin']},
   {id:'struttura', l:'Struttura',     ic:'🗂', sec:'gestione', r:['admin']},
@@ -515,44 +515,44 @@ function renderGriglia(pb){
 }
 
 function renderGrigliaTable(){
-  const wrap=$('griglia-wrap');
-  if(!wrap) return;
+  const wrap=$('griglia-wrap'); if(!wrap) return;
   const isAdm=S.user?.ruolo==='admin';
   const {search,catId,sediSel}=S.griglia;
   const sediVis=S.sedi.filter(s=>s.attiva&&sediSel.includes(s.id));
-  const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
-
-  // stato accordion (persiste in S)
   if(!S.griglia.acc) S.griglia.acc={};
   const acc=S.griglia.acc;
 
+  // Struttura: per ogni sede, una colonna. Per ogni cat→subcat→campo, una riga con il valore.
+  // La sottocategoria diventa header di sezione. Il campo è la label di riga (chiave).
+  // Come richiesto al punto 6: riga sottocategoria = intestazione chiave sulle colonne (campo.nome).
+  // Interpretiamo: la griglia mantiene campi come righe (chiave) e sedi come colonne,
+  // con categoria e sottocategoria come header di gruppo espandibili.
+
   let html=`<table class="griglia">
     <thead><tr>
-      <th class="th-label">Informazione</th>
-      ${sediVis.map(s=>`<th title="${esc(s.indirizzo||'')}">
-        <div>${esc(s.nome)}</div>
+      <th class="th-label">Categoria / Chiave</th>
+      ${sediVis.map(s=>`<th>
+        <div style="font-weight:700">${esc(s.nome)}</div>
         <div style="font-size:9px;font-weight:400;color:var(--g500)">${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'')}</div>
       </th>`).join('')}
     </tr></thead><tbody>`;
 
+  const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
   catsVis.forEach(cat=>{
-    // filtra sottocategorie e campi per search
     const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id).filter(sc=>{
       if(!search) return true;
-      // controlla se almeno un campo/valore corrisponde
       const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id);
-      return sc.nome.toLowerCase().includes(search.toLowerCase())||
+      return sc.nome.toLowerCase().includes(search.toLowerCase())||cat.nome.toLowerCase().includes(search.toLowerCase())||
         campiSc.some(c=>c.nome.toLowerCase().includes(search.toLowerCase())||
           sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase())));
     });
     if(!subcats.length&&search) return;
 
-    const catOpen=acc[cat.id]!==false; // default aperto
+    const catOpen=acc[cat.id]!==false;
     html+=`<tr class="griglia-cat-row" data-acc-cat="${cat.id}">
       <td colspan="${sediVis.length+1}">
-        <span class="acc-toggle ${catOpen?'open':'closed'}" id="acc-ic-cat-${cat.id}">▼</span>
+        <span class="acc-toggle ${catOpen?'open':'closed'}">▼</span>
         ${esc(cat.icona||'')} ${esc(cat.nome)}
-        ${isAdm?`<span style="float:right;font-size:11px;opacity:.6;font-weight:400">click per espandere/comprimere</span>`:''}
       </td>
     </tr>`;
 
@@ -561,22 +561,29 @@ function renderGrigliaTable(){
         const campiSc=S.campi.filter(c=>c.sottocategoria_id===sc.id).filter(c=>{
           if(!search) return true;
           return c.nome.toLowerCase().includes(search.toLowerCase())||
+            sc.nome.toLowerCase().includes(search.toLowerCase())||
             sediVis.some(s=>getValore(s.id,c.id).toLowerCase().includes(search.toLowerCase()));
         });
         if(!campiSc.length&&search) return;
 
         const scOpen=acc[sc.id]!==false;
+        // riga sottocategoria: mostra il nome sc + per ogni campo una sub-intestazione
         html+=`<tr class="griglia-subcat-row" data-acc-sc="${sc.id}">
           <td colspan="${sediVis.length+1}" style="padding-left:18px">
-            <span class="acc-toggle ${scOpen?'open':'closed'}" id="acc-ic-sc-${sc.id}">▼</span>
+            <span class="acc-toggle ${scOpen?'open':'closed'}">▼</span>
             ${esc(sc.nome)}
           </td>
         </tr>`;
 
         if(scOpen){
+          // sotto la sottocategoria: ogni campo è una riga (chiave = campo.nome)
           campiSc.forEach(campo=>{
+            const hl=search&&campo.nome.toLowerCase().includes(search.toLowerCase())
+              ?campo.nome.replace(new RegExp(`(${search})`,'gi'),'<mark>$1</mark>'):esc(campo.nome);
             html+=`<tr class="griglia-campo-row">
-              <td class="td-label">${esc(campo.nome)}</td>
+              <td class="td-label" style="padding-left:32px">
+                <span style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.3px">${hl}</span>
+              </td>
               ${sediVis.map(s=>{
                 const val=getValore(s.id,campo.id);
                 const highlighted=search&&val.toLowerCase().includes(search.toLowerCase())
@@ -597,23 +604,13 @@ function renderGrigliaTable(){
   html+=`</tbody></table>`;
   wrap.innerHTML=html;
 
-  // accordion click
   wrap.querySelectorAll('[data-acc-cat]').forEach(row=>{
-    row.addEventListener('click',()=>{
-      const catId=row.dataset.accCat;
-      acc[catId]=acc[catId]===false?true:false;
-      renderGrigliaTable();
-    });
+    row.addEventListener('click',()=>{acc[row.dataset.accCat]=acc[row.dataset.accCat]===false?true:false;renderGrigliaTable();});
   });
   wrap.querySelectorAll('[data-acc-sc]').forEach(row=>{
-    row.addEventListener('click',()=>{
-      const scId=row.dataset.accSc;
-      acc[scId]=acc[scId]===false?true:false;
-      renderGrigliaTable();
-    });
+    row.addEventListener('click',()=>{acc[row.dataset.accSc]=acc[row.dataset.accSc]===false?true:false;renderGrigliaTable();});
   });
 
-  // inline edit
   if(isAdm){
     wrap.querySelectorAll('.inline-edit').forEach(input=>{
       input.addEventListener('click',e=>e.stopPropagation());
@@ -642,23 +639,26 @@ function renderMappa(pb){
   pb.style.padding='0';
   pb.innerHTML=`<div id="map-page">
     <div id="map-container">
-      <div class="map-controls">
-        <div class="map-ctrl-card">
-          <div class="map-ctrl-title">🗺 Filtra sedi</div>
-          <div id="map-sedi-wrap"></div>
-        </div>
-      </div>
       <div id="map"></div>
     </div>
     <div id="map-sidebar">
       <button id="map-sidebar-toggle" title="Mostra/nascondi pannello">◀</button>
       <div id="map-sidebar-inner">
-        <div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:12px">📌 Campi da mostrare nei popup</div>
-        <input class="fi-sm" id="map-sf-search" placeholder="🔍 Cerca campo..." style="width:100%;margin-bottom:10px"/>
-        <div style="margin-bottom:8px;display:flex;gap:8px;flex-wrap:wrap">
-          <select class="fi-sm" id="map-sf-cat" style="flex:1">
+        <div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:12px">🗺 Sedi visualizzate</div>
+        <div style="display:flex;gap:6px;margin-bottom:8px">
+          <button class="btn bs bsm" id="map-sel-all">Tutte</button>
+          <button class="btn bs bsm" id="map-sel-none">Nessuna</button>
+        </div>
+        <div id="map-sedi-checks" style="margin-bottom:16px"></div>
+        <div style="border-top:1px solid var(--g200);padding-top:14px;margin-bottom:10px">
+          <div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:8px">📌 Campi nel popup</div>
+          <input class="fi-sm" id="map-sf-search" placeholder="🔍 Cerca campo..." style="width:100%;margin-bottom:8px"/>
+          <select class="fi-sm" id="map-sf-cat" style="width:100%;margin-bottom:10px">
             <option value="">Tutte le categorie</option>
             ${S.categorie.map(c=>`<option value="${c.id}">${esc(c.nome)}</option>`).join('')}
+          </select>
+          <select class="fi-sm" id="map-sf-subcat" style="width:100%;margin-bottom:10px">
+            <option value="">Tutte le sottocategorie</option>
           </select>
         </div>
         <div id="map-sf-campi"></div>
@@ -674,11 +674,15 @@ function renderMappa(pb){
     setTimeout(()=>S.mappa.leaflet?.invalidateSize(),320);
   });
 
-  // multiselect sedi
-  const msEl=buildMultiSel('mappa',S.mappa.sediSel,ids=>{
-    S.mappa.sediSel=[...ids]; updateMapMarkers();
+  // sedi checkboxes nel pannello
+  renderMapSediChecks();
+  $('map-sel-all').addEventListener('click',()=>{
+    S.mappa.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
+    renderMapSediChecks(); updateMapMarkers();
   });
-  $('map-sedi-wrap').appendChild(msEl);
+  $('map-sel-none').addEventListener('click',()=>{
+    S.mappa.sediSel=[]; renderMapSediChecks(); updateMapMarkers();
+  });
 
   // Leaflet init
   const map=L.map('map',{center:[43.5,11.0],zoom:8,zoomControl:true});
@@ -687,83 +691,135 @@ function renderMappa(pb){
     attribution:'© <a href="https://www.openstreetmap.org">OpenStreetMap</a>',maxZoom:19
   }).addTo(map);
 
-  // marker verde
   const greenIcon=L.divIcon({
-    html:`<div style="width:28px;height:28px;border-radius:50% 50% 50% 0;background:var(--verde);border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.3);transform:rotate(-45deg)"></div>`,
-    iconSize:[28,28],iconAnchor:[14,28],popupAnchor:[0,-32],className:''
+    html:`<div style="width:22px;height:22px;border-radius:50%;background:#9DBF60;border:3px solid #fff;box-shadow:0 2px 8px rgba(0,0,0,.35)"></div>`,
+    iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-14],className:''
   });
   S.mappa._icon=greenIcon;
   S.mappa.markers={};
+  S.mappa.popupOpen={};
 
   updateMapMarkers();
   renderSidebarCampi();
 
-  // filtri sidebar
   $('map-sf-search').addEventListener('input',renderSidebarCampi);
-  $('map-sf-cat').addEventListener('change',renderSidebarCampi);
+  $('map-sf-cat').addEventListener('change',()=>{
+    // aggiorna sottocategorie
+    const catId=$('map-sf-cat').value;
+    const subEl=$('map-sf-subcat');
+    subEl.innerHTML=`<option value="">Tutte le sottocategorie</option>`+
+      S.sottocategorie.filter(sc=>!catId||sc.categoria_id===catId)
+        .map(sc=>`<option value="${sc.id}">${esc(sc.nome)}</option>`).join('');
+    renderSidebarCampi();
+  });
+  $('map-sf-subcat').addEventListener('change',renderSidebarCampi);
+}
+
+function renderMapSediChecks(){
+  const wrap=$('map-sedi-checks'); if(!wrap) return;
+  // raggruppa per area
+  const perArea={};
+  S.sedi.filter(s=>s.attiva).forEach(s=>{
+    const a=S.aree.find(x=>x.id===s.area_id)?.nome||'Altra area';
+    if(!perArea[a]) perArea[a]=[];
+    perArea[a].push(s);
+  });
+  wrap.innerHTML=Object.entries(perArea).map(([area,sediA])=>`
+    <div style="margin-bottom:8px">
+      <div style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${esc(area)}</div>
+      ${sediA.map(s=>`
+        <div class="sf-campo">
+          <input type="checkbox" id="msc-${s.id}" data-msid="${s.id}" ${S.mappa.sediSel.includes(s.id)?'checked':''}>
+          <label for="msc-${s.id}">${esc(s.nome)}</label>
+        </div>`).join('')}
+    </div>`).join('');
+  wrap.querySelectorAll('[data-msid]').forEach(cb=>{
+    cb.addEventListener('change',e=>{
+      const sid=e.target.dataset.msid;
+      if(e.target.checked){if(!S.mappa.sediSel.includes(sid))S.mappa.sediSel.push(sid);}
+      else S.mappa.sediSel=S.mappa.sediSel.filter(x=>x!==sid);
+      updateMapMarkers();
+    });
+  });
 }
 
 function updateMapMarkers(){
-  const map=S.mappa.leaflet;
-  if(!map) return;
-  // rimuovi tutti
+  const map=S.mappa.leaflet; if(!map) return;
   Object.values(S.mappa.markers).forEach(m=>m.remove());
   S.mappa.markers={};
+  S.mappa.popupOpen={};
 
   const sediVis=S.sedi.filter(s=>s.attiva&&s.lat&&s.lng&&S.mappa.sediSel.includes(s.id));
   const bounds=[];
   sediVis.forEach(sede=>{
-    const popup=buildPopupContent(sede);
-    const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon})
-      .addTo(map)
-      .bindPopup(popup,{maxWidth:280,className:'lf-popup-wrap'});
+    const marker=L.marker([sede.lat,sede.lng],{icon:S.mappa._icon}).addTo(map);
+    // popup persistente (non si chiude cliccando altrove)
+    const popup=L.popup({autoClose:false,closeOnClick:false,maxWidth:280})
+      .setContent(buildPopupContent(sede));
+    marker.bindPopup(popup);
+    // toggle: click sul marker apre/chiude il popup di quella sede
+    marker.on('click',()=>{
+      if(marker.isPopupOpen()) marker.closePopup();
+      else marker.openPopup();
+    });
     S.mappa.markers[sede.id]=marker;
     bounds.push([sede.lat,sede.lng]);
   });
   if(bounds.length) map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
 }
 
+function refreshPopups(){
+  // aggiorna contenuto di tutti i popup aperti senza chiuderli
+  Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
+    const sede=S.sedi.find(s=>s.id===sid);
+    if(sede) marker.setPopupContent(buildPopupContent(sede));
+  });
+}
+
 function buildPopupContent(sede){
   const campiSel=S.mappa.campiSel;
   let rows='';
-  campiSel.forEach(campoId=>{
-    const campo=S.campi.find(c=>c.id===campoId);
-    const val=getValore(sede.id,campoId);
-    if(!campo||(!val&&val!=='0')) return;
-    rows+=`<div class="lf-popup-field"><span class="lf-popup-label">${esc(campo.nome)}:</span><span class="lf-popup-val">${esc(val)}</span></div>`;
+  // raggruppa per sottocategoria per leggibilità
+  const scIds=[...new Set(campiSel.map(cid=>S.campi.find(c=>c.id===cid)?.sottocategoria_id).filter(Boolean))];
+  scIds.forEach(scId=>{
+    const sc=S.sottocategorie.find(x=>x.id===scId);
+    const campiSc=campiSel.filter(cid=>{const c=S.campi.find(x=>x.id===cid);return c?.sottocategoria_id===scId;});
+    const righe=campiSc.map(cid=>{
+      const campo=S.campi.find(c=>c.id===cid);
+      const val=getValore(sede.id,cid);
+      if(!campo) return '';
+      return `<div class="lf-popup-field"><span class="lf-popup-label">${esc(campo.nome)}:</span><span class="lf-popup-val">${val?esc(val):'<em style="color:var(--g300)">—</em>'}</span></div>`;
+    }).join('');
+    if(righe) rows+=`<div style="margin-bottom:6px"><div style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.4px;margin-bottom:3px">${esc(sc?.nome||'')}</div>${righe}</div>`;
   });
   const area=S.aree.find(a=>a.id===sede.area_id)?.nome||'';
   return `<div class="lf-popup">
     <div class="lf-popup-title">${esc(sede.nome)}</div>
-    ${area?`<div style="font-size:11px;color:var(--g500);margin-bottom:6px">${esc(area)}</div>`:''}
+    ${area?`<div style="font-size:11px;color:var(--g500);margin-bottom:4px">${esc(area)}</div>`:''}
     ${sede.indirizzo?`<div style="font-size:11px;color:var(--g700);margin-bottom:6px">📍 ${esc(sede.indirizzo)}</div>`:''}
-    ${rows||'<div style="font-size:12px;color:var(--g500);font-style:italic">Nessun campo selezionato</div>'}
+    ${rows||'<div style="font-size:12px;color:var(--g500);font-style:italic">Seleziona campi dal pannello →</div>'}
   </div>`;
 }
 
 function renderSidebarCampi(){
   const search=($('map-sf-search')?.value||'').toLowerCase();
   const catId=$('map-sf-cat')?.value||'';
-  const wrap=$('map-sf-campi');
-  if(!wrap) return;
+  const subcatId=$('map-sf-subcat')?.value||'';
+  const wrap=$('map-sf-campi'); if(!wrap) return;
 
   const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
   let html='';
   catsVis.forEach(cat=>{
-    const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id);
+    const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id&&(!subcatId||sc.id===subcatId));
     const campiCat=[];
     subcats.forEach(sc=>{
       S.campi.filter(c=>c.sottocategoria_id===sc.id&&(!search||c.nome.toLowerCase().includes(search)||sc.nome.toLowerCase().includes(search))).forEach(c=>campiCat.push({campo:c,sc}));
     });
     if(!campiCat.length) return;
-    html+=`<div class="sf-cat">
-      <div class="sf-cat-title"><span>${cat.icona||'📁'}</span>${esc(cat.nome)}</div>`;
+    html+=`<div class="sf-cat"><div class="sf-cat-title"><span>${cat.icona||'📁'}</span>${esc(cat.nome)}</div>`;
     let lastSc='';
     campiCat.forEach(({campo,sc})=>{
-      if(sc.id!==lastSc){
-        html+=`<div class="sf-subcat-title">${esc(sc.nome)}</div>`;
-        lastSc=sc.id;
-      }
+      if(sc.id!==lastSc){html+=`<div class="sf-subcat-title">${esc(sc.nome)}</div>`;lastSc=sc.id;}
       const checked=S.mappa.campiSel.includes(campo.id);
       html+=`<div class="sf-campo">
         <input type="checkbox" id="sf-${campo.id}" data-campo="${campo.id}" ${checked?'checked':''}>
@@ -777,13 +833,9 @@ function renderSidebarCampi(){
   wrap.querySelectorAll('[data-campo]').forEach(cb=>{
     cb.addEventListener('change',e=>{
       const cid=e.target.dataset.campo;
-      if(e.target.checked){if(!S.mappa.campiSel.includes(cid)) S.mappa.campiSel.push(cid);}
-      else{S.mappa.campiSel=S.mappa.campiSel.filter(x=>x!==cid);}
-      // aggiorna popup aperti
-      Object.entries(S.mappa.markers).forEach(([sid,marker])=>{
-        const sede=S.sedi.find(s=>s.id===sid);
-        if(sede) marker.setPopupContent(buildPopupContent(sede));
-      });
+      if(e.target.checked){if(!S.mappa.campiSel.includes(cid))S.mappa.campiSel.push(cid);}
+      else S.mappa.campiSel=S.mappa.campiSel.filter(x=>x!==cid);
+      refreshPopups();
     });
   });
 }
@@ -860,6 +912,8 @@ function openSedeModal(sede){
           logAct('sede_create',`Nuova sede: ${nome}`);
         }
         closeM(); renderPage(); toast(sede?'Sede aggiornata':'Sede aggiunta ✅');
+        // aggiorna mappa se aperta
+        if(S.mappa.leaflet&&!sede) { if(!S.mappa.sediSel.includes(ns?.id)&&ns) S.mappa.sediSel.push(ns.id); updateMapMarkers(); }
       }catch(e){toast(e.message,'err');}
     }},
   ]);
