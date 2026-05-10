@@ -1107,9 +1107,14 @@ function openUtenteModal(u){
           // creazione utente via Edge Function (come negli altri tool)
           const pwd=$('upw')?.value||'';
           if(pwd.length<6){toast('Password minimo 6 caratteri','err');return;}
-          const nid=uid();
-          await db('POST',T('profili'),{body:{id:nid,nome,cognome:cog,email,ruolo,attivo}});
-          S.profili.push({id:nid,nome,cognome:cog,email,ruolo,attivo});
+          const res=await fetch(`${CFG.FN}/sedi-create-user`,{
+            method:'POST',
+            headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
+            body:JSON.stringify({email,password:pwd,nome,cognome:cog,ruolo}),
+          });
+          const data=await res.json();
+          if(!data.ok) throw new Error(data.error||'Errore creazione utente');
+          S.profili.push({id:data.user_id,nome,cognome:cog,email,ruolo,attivo:true});
           logAct('utente_create',`Nuovo utente: ${nome} ${cog}`);
         }
         closeM();renderPage();toast(u?'Utente aggiornato':'Utente aggiunto ✅');
