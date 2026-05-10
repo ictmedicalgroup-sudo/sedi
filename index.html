@@ -138,14 +138,20 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 .ms-sel-badge{display:inline-flex;align-items:center;background:var(--verde);color:#fff;border-radius:20px;padding:1px 7px;font-size:11px;font-weight:700;margin-left:4px}
 
 /* ── Mappa ── */
-#map-page{display:flex;height:calc(100vh - 93px);gap:0;position:relative}
-#map-container{flex:1;position:relative}
+#map-page{display:flex;height:calc(100vh - 93px);position:relative;overflow:hidden}
+#map-container{flex:1;position:relative;min-width:0}
 #map{width:100%;height:100%}
-#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100;position:relative}
+#map-sidebar{width:340px;flex-shrink:0;background:#fff;border-left:1px solid var(--g200);display:flex;flex-direction:column;overflow:hidden;transition:width .3s ease;z-index:100}
 #map-sidebar.collapsed{width:0}
 #map-sidebar-inner{width:340px;flex-shrink:0;overflow-y:auto;padding:16px}
-#map-sidebar-toggle{position:absolute;top:50%;right:-28px;transform:translateY(-50%);z-index:201;background:#fff;border:1px solid var(--g200);border-left:none;border-radius:0 var(--rsm) var(--rsm) 0;padding:10px 6px;cursor:pointer;box-shadow:var(--sh-sm);font-size:12px;color:var(--g500);white-space:nowrap}
-#map-sidebar-toggle:hover{background:var(--g50)}
+#map-sidebar-toggle{
+  position:absolute;top:50%;right:340px;transform:translateY(-50%);
+  z-index:201;background:#fff;border:1px solid var(--g200);
+  border-right:none;border-radius:var(--rsm) 0 0 var(--rsm);
+  padding:12px 6px;cursor:pointer;box-shadow:var(--sh-sm);
+  font-size:13px;color:var(--g500);transition:right .3s ease;line-height:1;
+}
+#map-sidebar-toggle:hover{background:var(--g50);color:var(--verde)}
 .map-controls{position:absolute;top:12px;left:12px;z-index:100;display:flex;flex-direction:column;gap:8px}
 .map-ctrl-card{background:#fff;border-radius:var(--r);box-shadow:var(--sh-md);padding:10px 14px;min-width:220px}
 .map-ctrl-title{font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:7px}
@@ -246,7 +252,6 @@ const CFG = {
 };
 const T = n => `sedi_${n}`;
 
-
 /* ══════════════════════════════════════════
    STATO
 ══════════════════════════════════════════ */
@@ -255,7 +260,7 @@ const S = {
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   page: 'griglia',
   // filtri griglia
-  griglia: { search: '', catId: '', sediSel: [] },
+  griglia: { search: '', catIds: [], sediSel: [] },
   // mappa
   mappa: { sediSel: [], campiSel: [], search: '', catId: '', subcatId: '', leaflet: null, markers: {} },
 };
@@ -415,8 +420,7 @@ function buildMultiSel(id,selIds,onChange){
     perArea[area].push(s);
   });
   const sel=selIds;
-  
-const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+  const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
     sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
 
   const wrapper=document.createElement('div');
@@ -491,9 +495,9 @@ function renderGriglia(pb){
   pb.innerHTML=`<div class="fian">
     <div class="filters-bar" id="gf-bar">
       <input class="fi-sm" id="gf-search" placeholder="🔍 Cerca..." value="${esc(S.griglia.search)}" style="width:200px"/>
-      <select class="fi-sm" id="gf-cat">
-        <option value="">Tutte le categorie</option>
-        ${S.categorie.map(c=>`<option value="${c.id}"${S.griglia.catId===c.id?' selected':''}>${esc(c.nome)}</option>`).join('')}
+      <select class="fi-sm" id="gf-cat" multiple size="${Math.min(S.categorie.length+1,5)}" style="min-width:160px">
+        <option value="" selected>Tutte le categorie</option>
+        ${S.categorie.map(c=>`<option value="${c.id}">${esc(c.icona||'')} ${esc(c.nome)}</option>`).join('')}
       </select>
       <div id="gf-sedi-wrap"></div>
       ${isAdm?`<button class="btn bpg bsm" id="gf-add-col">+ Aggiungi sede</button>`:''}
@@ -510,7 +514,10 @@ function renderGriglia(pb){
   $('gf-sedi-wrap').appendChild(msEl);
 
   $('gf-search').addEventListener('input',e=>{S.griglia.search=e.target.value;renderGrigliaTable();});
-  $('gf-cat').addEventListener('change',e=>{S.griglia.catId=e.target.value;renderGrigliaTable();});
+  $('gf-cat').addEventListener('change',e=>{
+    const sel=[...e.target.selectedOptions].map(o=>o.value).filter(v=>v!=='');
+    S.griglia.catIds=sel; renderGrigliaTable();
+  });
   if(isAdm) $('gf-add-col')?.addEventListener('click',()=>openSedeModal(null));
 
   renderGrigliaTable();
@@ -519,7 +526,8 @@ function renderGriglia(pb){
 function renderGrigliaTable(){
   const wrap=$('griglia-wrap'); if(!wrap) return;
   const isAdm=S.user?.ruolo==='admin';
-  const {search,catId,sediSel}=S.griglia;
+  const {search,sediSel}=S.griglia;
+  const catIds=S.griglia.catIds||[];
   const sediVis=S.sedi.filter(s=>s.attiva&&sediSel.includes(s.id));
   if(!S.griglia.acc) S.griglia.acc={};
   const acc=S.griglia.acc;
@@ -533,7 +541,7 @@ function renderGrigliaTable(){
       </th>`).join('')}
     </tr></thead><tbody>`;
 
-  const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
+  const catsVis=S.categorie.filter(c=>!catIds.length||catIds.includes(c.id));
   catsVis.forEach(cat=>{
     const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id).filter(sc=>{
       if(!search) return true;
@@ -634,8 +642,8 @@ function renderMappa(pb){
     <div id="map-container">
       <div id="map"></div>
     </div>
+    <button id="map-sidebar-toggle" title="Mostra/nascondi pannello">◀</button>
     <div id="map-sidebar">
-      <button id="map-sidebar-toggle" title="Mostra/nascondi pannello">◀</button>
       <div id="map-sidebar-inner">
         <div style="font-size:13px;font-weight:700;color:var(--g700);margin-bottom:12px">🗺 Sedi visualizzate</div>
         <div style="display:flex;gap:6px;margin-bottom:8px">
@@ -660,10 +668,14 @@ function renderMappa(pb){
   </div>`;
 
   // sidebar toggle
-  $('map-sidebar-toggle').addEventListener('click',()=>{
-    const sb=$('map-sidebar'),tog=$('map-sidebar-toggle');
+  const tog=$('map-sidebar-toggle');
+  tog.addEventListener('click',()=>{
+    const sb=$('map-sidebar');
     const collapsed=sb.classList.toggle('collapsed');
     tog.textContent=collapsed?'▶':'◀';
+    tog.style.right=collapsed?'0':'340px';
+    tog.style.borderRadius=collapsed?'var(--rsm)':'var(--rsm) 0 0 var(--rsm)';
+    tog.style.borderRight=collapsed?'1px solid var(--g200)':'none';
     setTimeout(()=>S.mappa.leaflet?.invalidateSize(),320);
   });
 
@@ -689,8 +701,10 @@ function renderMappa(pb){
     iconSize:[22,22],iconAnchor:[11,11],popupAnchor:[0,-14],className:''
   });
   S.mappa._icon=greenIcon;
+  // reset markers solo quando si inizializza la mappa (non ad ogni updateMapMarkers)
   S.mappa.markers={};
-  S.mappa.popupOpen={};
+  S.mappa._fitted=false;
+  S.mappa.popupWasOpen={};
 
   updateMapMarkers();
   renderSidebarCampi();
@@ -758,12 +772,15 @@ function updateMapMarkers(){
         else marker.openPopup();
       });
       S.mappa.markers[sede.id]=marker;
+    } else {
+      // aggiorna contenuto popup per sede già presente
+      S.mappa.markers[sede.id].setPopupContent(buildPopupContent(sede));
     }
     bounds.push([sede.lat,sede.lng]);
   });
-  if(bounds.length&&Object.keys(S.mappa.markers).length===sediConCoord.length){
-    // solo al primo caricamento
-    if(!S.mappa._fitted){map.fitBounds(bounds,{padding:[40,40],maxZoom:12});S.mappa._fitted=true;}
+  if(bounds.length&&!S.mappa._fitted){
+    map.fitBounds(bounds,{padding:[40,40],maxZoom:12});
+    S.mappa._fitted=true;
   }
   updatePopupVisibility();
 }
@@ -825,7 +842,6 @@ function renderSidebarCampi(){
   const wrap=$('map-sf-campi'); if(!wrap) return;
 
   const catsVis=S.categorie.filter(c=>!catId||c.id===catId);
-  let html='';
   catsVis.forEach(cat=>{
     const subcats=S.sottocategorie.filter(sc=>sc.categoria_id===cat.id&&(!subcatId||sc.id===subcatId));
     const campiCat=[];
