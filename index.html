@@ -246,6 +246,7 @@ const CFG = {
 };
 const T = n => `sedi_${n}`;
 
+
 /* ══════════════════════════════════════════
    STATO
 ══════════════════════════════════════════ */
@@ -414,7 +415,8 @@ function buildMultiSel(id,selIds,onChange){
     perArea[area].push(s);
   });
   const sel=selIds;
-  const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+  
+const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
     sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
 
   const wrapper=document.createElement('div');
