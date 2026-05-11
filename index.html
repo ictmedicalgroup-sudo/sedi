@@ -374,9 +374,9 @@ async function loadAll(){
   const [aree,sedi,categorie,sottocategorie,campi,valori,profili,log]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
-    db('GET',T('categorie'),{ord:'ordine.asc,nome.asc'}),
-    db('GET',T('sottocategorie'),{ord:'ordine.asc,nome.asc'}),
-    db('GET',T('campi'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('categorie'),{ord:'nome.asc'}),
+    db('GET',T('sottocategorie'),{ord:'nome.asc'}),
+    db('GET',T('campi'),{ord:'nome.asc'}),
     db('GET',T('valori')),
     db('GET',T('profili'),{ord:'cognome.asc'}),
     db('GET',T('log'),{ord:'created_at.desc',lim:'200'}),
@@ -495,7 +495,7 @@ function buildMultiSel(id,selIds,onChange){
   wrapper.innerHTML=`
     <div class="ms-btn" id="ms-btn-${id}">
       <span>📍</span><span id="ms-lbl-${id}">${label()}</span>
-      ${sel.length>0&&sel.length<S.sedi.filter(s=>s.attiva).length?`<span class="ms-sel-badge">${sel.length}</span>`:''}
+
       <span style="margin-left:auto;font-size:10px">▼</span>
     </div>
     <div class="ms-dropdown hid" id="ms-dd-${id}">
@@ -551,8 +551,6 @@ function buildMultiSel(id,selIds,onChange){
     const lbl=wrapper.querySelector(`#ms-lbl-${id}`);
     if(lbl) lbl.textContent=sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
       sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
-    const badge=wrapper.querySelector('.ms-sel-badge');
-    if(badge){if(sel.length>0&&sel.length<S.sedi.filter(s=>s.attiva).length) badge.textContent=sel.length; else badge.textContent='';}
   }
   return wrapper;
 }
@@ -967,27 +965,53 @@ function renderSidebarCampi(){
    PAGINA SEDI (CRUD)
 ══════════════════════════════════════════ */
 function renderSediPage(pb){
-  pb.innerHTML=`<div class="fian"><div class="card">
-    <div class="ch">
-      <span class="ct">📍 Sedi (${S.sedi.length})</span>
+  // raggruppa sedi per area, ordinate per campo ordine
+  const perArea={};
+  const sediOrd=[...S.sedi].sort((a,b)=>(a.ordine||0)-(b.ordine||0)||(a.nome||'').localeCompare(b.nome||''));
+  sediOrd.forEach(s=>{
+    const area=S.aree.find(a=>a.id===s.area_id)?.nome||'— Nessuna area';
+    if(!perArea[area]) perArea[area]=[];
+    perArea[area].push(s);
+  });
+  // ordina aree per ordine dell'area
+  const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+  const areeKeys=[...areeOrd.map(a=>a.nome),'— Nessuna area'].filter(k=>perArea[k]);
+
+  let tablesHTML='';
+  areeKeys.forEach(area=>{
+    const sediArea=perArea[area];
+    tablesHTML+=`
+    <div class="card" style="margin-bottom:16px">
+      <div class="ch" style="background:var(--g50)">
+        <span style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px">📍 ${esc(area)}</span>
+        <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
+      </div>
+      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <tbody class="sortable-area" data-area="${esc(area)}">
+        ${sediArea.map(s=>`<tr data-id="${s.id}" style="cursor:grab">
+          <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
+          <td><div class="tn">${esc(s.nome)}</div></td>
+          <td>${esc(s.indirizzo||'—')}</td>
+          <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
+          <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
+          <td><div class="tda">
+            <button class="btn bs bsm" data-se="${s.id}">✏</button>
+            <button class="btn bd bsm" data-sd="${s.id}">🗑</button>
+          </div></td>
+        </tr>`).join('')}
+      </tbody></table>
+    </div>`;
+  });
+
+  pb.innerHTML=`<div class="fian">
+    <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px">
+      <span style="font-size:13px;font-weight:700">📍 Sedi (${S.sedi.length})</span>
       <button class="btn bpg bsm" id="s-add">+ Nuova sede</button>
     </div>
-    ${!S.sedi.length?`<div class="emp"><div class="emi">📍</div><div class="emt">Nessuna sede</div></div>`:
-    `<table class="dt"><thead><tr><th>Nome</th><th>Area</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
-    ${S.sedi.map(s=>`<tr>
-      <td><div class="tn">${esc(s.nome)}</div></td>
-      <td>${esc(S.aree.find(a=>a.id===s.area_id)?.nome||'—')}</td>
-      <td>${esc(s.indirizzo||'—')}</td>
-      <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
-      <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
-      <td><div class="tda">
-        <button class="btn bs bsm" data-se="${s.id}">✏</button>
-        <button class="btn bd bsm" data-sd="${s.id}">🗑</button>
-      </div></td>
-    </tr>`).join('')}
-    </tbody></table>`}
-  </div></div>`;
-  $('s-add').addEventListener('click',()=>openSedeModal(null));
+    ${!S.sedi.length?`<div class="card"><div class="emp"><div class="emi">📍</div><div class="emt">Nessuna sede</div></div></div>`:tablesHTML}
+  </div>`;
+
+  $('s-add')?.addEventListener('click',()=>openSedeModal(null));
   pb.querySelectorAll('[data-se]').forEach(b=>b.addEventListener('click',()=>openSedeModal(S.sedi.find(x=>x.id===b.dataset.se))));
   pb.querySelectorAll('[data-sd]').forEach(b=>b.addEventListener('click',()=>{
     const s=S.sedi.find(x=>x.id===b.dataset.sd);
@@ -997,6 +1021,43 @@ function renderSediPage(pb){
       renderPage(); toast('Sede eliminata');
     });
   }));
+
+  // Drag & drop per riordinare
+  pb.querySelectorAll('.sortable-area').forEach(tbody=>{
+    let dragging=null;
+    tbody.querySelectorAll('tr[data-id]').forEach(row=>{
+      row.addEventListener('dragstart',e=>{dragging=row;row.style.opacity='.4';e.dataTransfer.effectAllowed='move';});
+      row.addEventListener('dragend',()=>{dragging.style.opacity='1';dragging=null;saveOrder(tbody);});
+      row.addEventListener('dragover',e=>{e.preventDefault();if(dragging&&dragging!==row){
+        const rect=row.getBoundingClientRect();
+        const mid=rect.top+rect.height/2;
+        if(e.clientY<mid) tbody.insertBefore(dragging,row);
+        else tbody.insertBefore(dragging,row.nextSibling);
+      }});
+      row.setAttribute('draggable','true');
+    });
+  });
+}
+
+async function saveOrder(tbody){
+  const rows=[...tbody.querySelectorAll('tr[data-id]')];
+  // calcola offset ordine in base al gruppo area
+  const area=tbody.dataset.area;
+  // trova offset: quante sedi vengono prima in altre aree
+  const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+  const areeKeys=[...areeOrd.map(a=>a.nome),'— Nessuna area'];
+  let offset=0;
+  for(const k of areeKeys){
+    if(k===area) break;
+    offset+=S.sedi.filter(s=>(S.aree.find(a=>a.id===s.area_id)?.nome||'— Nessuna area')===k).length;
+  }
+  for(let i=0;i<rows.length;i++){
+    const sid=rows[i].dataset.id;
+    const newOrd=offset+i;
+    await db('PATCH',T('sedi'),{flt:`id=eq.${sid}`,body:{ordine:newOrd}});
+    const s=S.sedi.find(x=>x.id===sid); if(s) s.ordine=newOrd;
+  }
+  toast('Ordine salvato ✅');
 }
 
 function openSedeModal(sede){
