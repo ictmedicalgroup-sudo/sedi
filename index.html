@@ -528,12 +528,6 @@ function buildMultiSel(id,selIds,onChange){
           </div>`).join('')}
       `).join('')}
     </div>`;
-          <div class="ms-item">
-            <input type="checkbox" id="ms-chk-${id}-${s.id}" data-sid="${s.id}" ${sel.includes(s.id)?'checked':''}>
-            <label for="ms-chk-${id}-${s.id}">${esc(s.nome)}</label>
-          </div>`).join('')}
-      `).join('')}
-    </div>`;
 
   // toggle dropdown — si chiude solo cliccando fuori
   wrapper.querySelector(`#ms-btn-${id}`).addEventListener('click',e=>{
