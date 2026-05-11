@@ -385,8 +385,22 @@ async function loadAll(){
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
   S.valori=valori||[];S.profili=profili||[];S.log=log||[];
   // init sedi sel default (tutte)
-  if(!S.griglia.sediSel.length) S.griglia.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
-  if(!S.mappa.sediSel.length)   S.mappa.sediSel=S.sedi.filter(s=>s.attiva).map(s=>s.id);
+  if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
+  if(!S.mappa.sediSel.length)   S.mappa.sediSel=sediOrdinate().map(s=>s.id);
+}
+
+
+// Restituisce le sedi attive ordinate per: ordine area → ordine sede → nome sede
+function sediOrdinate(filtra=null){
+  const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+  const areeMap={}; areeOrd.forEach((a,i)=>areeMap[a.id]=i);
+  return [...S.sedi]
+    .filter(s=>s.attiva&&(filtra?filtra(s):true))
+    .sort((a,b)=>{
+      const ai=areeMap[a.area_id]??999, bi=areeMap[b.area_id]??999;
+      if(ai!==bi) return ai-bi;
+      return (a.ordine||0)-(b.ordine||0)||(a.nome||'').localeCompare(b.nome||'');
+    });
 }
 
 function getValore(sedeId,campoId){
@@ -478,16 +492,19 @@ function buildMultiSelCat(id,selIds,onChange){
    MULTISELECT SEDI (componente riusabile)
 ══════════════════════════════════════════ */
 function buildMultiSel(id,selIds,onChange){
-  // raggruppa sedi per area
-  const perArea={};
-  S.sedi.filter(s=>s.attiva).forEach(s=>{
-    const area=S.aree.find(a=>a.id===s.area_id)?.nome||'Altra area';
-    if(!perArea[area]) perArea[area]=[];
-    perArea[area].push(s);
-  });
   const sel=selIds;
-  const label=()=>sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+  const label=()=>sel.length===sediOrdinate().length?'Tutte le sedi':
     sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
+
+  // raggruppa sedi per area rispettando l'ordine aree
+  const areeOrdMS=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+  const perAreaMS={};
+  sediOrdinate().forEach(s=>{
+    const a=S.aree.find(x=>x.id===s.area_id)?.nome||'Altra area';
+    if(!perAreaMS[a]) perAreaMS[a]=[];
+    perAreaMS[a].push(s);
+  });
+  const areeKeysMS=[...areeOrdMS.map(a=>a.nome),'Altra area'].filter(k=>perAreaMS[k]);
 
   const wrapper=document.createElement('div');
   wrapper.className='ms-wrap';
@@ -495,17 +512,22 @@ function buildMultiSel(id,selIds,onChange){
   wrapper.innerHTML=`
     <div class="ms-btn" id="ms-btn-${id}">
       <span>📍</span><span id="ms-lbl-${id}">${label()}</span>
-
       <span style="margin-left:auto;font-size:10px">▼</span>
     </div>
     <div class="ms-dropdown hid" id="ms-dd-${id}">
       <div class="ms-item" id="ms-all-${id}">
-        <input type="checkbox" id="ms-chk-all-${id}" ${sel.length===S.sedi.filter(s=>s.attiva).length?'checked':''}>
+        <input type="checkbox" id="ms-chk-all-${id}" ${sel.length===sediOrdinate().length?'checked':''}>
         <label for="ms-chk-all-${id}" style="font-weight:600">Tutte le sedi</label>
       </div>
-      ${Object.entries(perArea).map(([area,sediArea])=>`
+      ${areeKeysMS.map(area=>`
         <div class="ms-area-label">${area}</div>
-        ${sediArea.map(s=>`
+        ${perAreaMS[area].map(s=>`
+          <div class="ms-item">
+            <input type="checkbox" id="ms-chk-${id}-${s.id}" data-sid="${s.id}" ${sel.includes(s.id)?'checked':''}>
+            <label for="ms-chk-${id}-${s.id}">${esc(s.nome)}</label>
+          </div>`).join('')}
+      `).join('')}
+    </div>`;
           <div class="ms-item">
             <input type="checkbox" id="ms-chk-${id}-${s.id}" data-sid="${s.id}" ${sel.includes(s.id)?'checked':''}>
             <label for="ms-chk-${id}-${s.id}">${esc(s.nome)}</label>
@@ -532,7 +554,7 @@ function buildMultiSel(id,selIds,onChange){
     const checked=e.target.checked;
     wrapper.querySelectorAll(`[data-sid]`).forEach(cb=>cb.checked=checked);
     sel.length=0;
-    if(checked) S.sedi.filter(s=>s.attiva).forEach(s=>sel.push(s.id));
+    if(checked) sediOrdinate().forEach(s=>sel.push(s.id));
     updateLabel();
     onChange([...sel]);
   });
@@ -542,14 +564,14 @@ function buildMultiSel(id,selIds,onChange){
       const sid=e.target.dataset.sid;
       if(e.target.checked){if(!sel.includes(sid)) sel.push(sid);}
       else{const i=sel.indexOf(sid);if(i>-1)sel.splice(i,1);}
-      wrapper.querySelector(`#ms-chk-all-${id}`).checked=sel.length===S.sedi.filter(s=>s.attiva).length;
+      wrapper.querySelector(`#ms-chk-all-${id}`).checked=sel.length===sediOrdinate().length;
       updateLabel();
       onChange([...sel]);
     });
   });
   function updateLabel(){
     const lbl=wrapper.querySelector(`#ms-lbl-${id}`);
-    if(lbl) lbl.textContent=sel.length===S.sedi.filter(s=>s.attiva).length?'Tutte le sedi':
+    if(lbl) lbl.textContent=sel.length===sediOrdinate().length?'Tutte le sedi':
       sel.length===0?'Nessuna sede':`${sel.length} sedi selezionate`;
   }
   return wrapper;
@@ -594,7 +616,7 @@ function renderGrigliaTable(){
   const isAdm=S.user?.ruolo==='admin';
   const {search,sediSel}=S.griglia;
   const catIds=S.griglia.catIds||[];
-  const sediVis=S.sedi.filter(s=>s.attiva&&sediSel.includes(s.id));
+  const sediVis=sediOrdinate(s=>sediSel.includes(s.id));
   if(!S.griglia.acc) S.griglia.acc={};
   const acc=S.griglia.acc;
 
@@ -749,18 +771,18 @@ function renderMappa(pb){
   S.mappa.markers={};
   S.mappa._fitted=false;
   S.mappa.popupOpen={};
-  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
+  sediOrdinate(s=>s.lat&&s.lng).forEach(s=>{
     S.mappa.popupOpen[s.id]=S.mappa.sediSel.includes(s.id);
   });
 
   // sedi checkboxes nel pannello
   renderMapSediChecks();
   $('map-sel-all').addEventListener('click',()=>{
-    S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{S.mappa.popupOpen[s.id]=true;S.mappa.sediSel=S.sedi.filter(x=>x.attiva).map(x=>x.id);});
+    sediOrdinate(s=>s.lat&&s.lng).forEach(s=>{S.mappa.popupOpen[s.id]=true;}); S.mappa.sediSel=sediOrdinate().map(s=>s.id);
     renderMapSediChecks(); Object.keys(S.mappa.markers).forEach(sid=>applyPopupState(sid));
   });
   $('map-sel-none').addEventListener('click',()=>{
-    S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>S.mappa.popupOpen[s.id]=false);
+    sediOrdinate(s=>s.lat&&s.lng).forEach(s=>S.mappa.popupOpen[s.id]=false);
     S.mappa.sediSel=[];
     renderMapSediChecks(); Object.keys(S.mappa.markers).forEach(sid=>applyPopupState(sid));
   });
@@ -796,13 +818,15 @@ function renderMappa(pb){
 
 function renderMapSediChecks(){
   const wrap=$('map-sedi-checks'); if(!wrap) return;
+  const areeOrdM=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
   const perArea={};
-  S.sedi.filter(s=>s.attiva&&s.lat&&s.lng).forEach(s=>{
+  sediOrdinate(s=>s.lat&&s.lng).forEach(s=>{
     const a=S.aree.find(x=>x.id===s.area_id)?.nome||'Altra area';
     if(!perArea[a]) perArea[a]=[];
     perArea[a].push(s);
   });
-  wrap.innerHTML=Object.entries(perArea).map(([area,sediA])=>`
+  const areeKeysM=[...areeOrdM.map(a=>a.nome),'Altra area'].filter(k=>perArea[k]);
+  wrap.innerHTML=areeKeysM.map(area=>{const sediA=perArea[area];return `
     <div style="margin-bottom:8px">
       <div style="font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin-bottom:4px">${esc(area)}</div>
       ${sediA.map(s=>`
@@ -810,7 +834,7 @@ function renderMapSediChecks(){
           <input type="checkbox" id="msc-${s.id}" data-msid="${s.id}" ${S.mappa.popupOpen[s.id]?'checked':''}>
           <label for="msc-${s.id}">${esc(s.nome)}</label>
         </div>`).join('')}
-    </div>`).join('');
+    </div>`;}).join('');
   wrap.querySelectorAll('[data-msid]').forEach(cb=>{
     cb.addEventListener('change',e=>{
       const sid=e.target.dataset.msid;
