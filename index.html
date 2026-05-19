@@ -1736,6 +1736,11 @@ function openSedeModal(sede){
         <option value="">— Nessuna area —</option>
         ${S.aree.map(a=>`<option value="${a.id}"${sede?.area_id===a.id?' selected':''}>${esc(a.nome)}</option>`).join('')}
       </select></div>
+    <div class="fg"><div class="fl">Ragione sociale</div>
+      <select class="fse" id="sm-rag">
+        <option value="">— Nessuna —</option>
+        ${S.ragioni.map(r=>`<option value="${r.id}"${sede?.ragione_sociale_id===r.id?' selected':''}>${esc(r.nome)}</option>`).join('')}
+      </select></div>
     <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="sm-ind" value="${esc(sede?.indirizzo||'')}"/></div>
     <div class="fr">
       <div class="fg"><div class="fl">Latitudine</div><input class="fi" id="sm-lat" type="number" step="0.0001" value="${sede?.lat||''}" placeholder="es. 43.7228"/></div>
@@ -1752,10 +1757,10 @@ function openSedeModal(sede){
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=$('sm-nome').value.trim(),area=$('sm-area').value,ind=$('sm-ind').value.trim();
       const lat=parseFloat($('sm-lat').value)||null,lng=parseFloat($('sm-lng').value)||null;
-      const attiva=$('sm-att').checked;
+      const attiva=$('sm-att').checked,rag=$('sm-rag').value;
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva};
+        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva,ragione_sociale_id:rag||null};
         if(sede){
           await db('PATCH',T('sedi'),{flt:`id=eq.${sede.id}`,body:payload});
           S.sedi=S.sedi.map(s=>s.id===sede.id?{...s,...payload}:s);
