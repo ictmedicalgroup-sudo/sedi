@@ -4,7 +4,6 @@
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width,initial-scale=1.0"/>
 <title>Gestione Sedi</title>
-<link rel="icon" type="image/svg+xml" href="favicon.svg">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Raleway:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
@@ -101,7 +100,12 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 .hid{display:none!important}
 .fian{animation:fian .25s ease}@keyframes fian{from{opacity:0;transform:translateY(8px)}to{opacity:1;transform:none}}
 
-/* ── Griglia info ── */
+/* ── Stats cards ── */
+.sg{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:14px;margin-bottom:20px}
+.sc{background:#fff;border-radius:var(--r);padding:16px;box-shadow:var(--sh-sm);border:1px solid var(--g200);display:flex;align-items:center;gap:12px}
+.si{width:40px;height:40px;border-radius:var(--rsm);display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.sl{font-size:10px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px}
+.sv{font-size:22px;font-weight:800;color:var(--g900);line-height:1.2}
 .griglia-wrap{overflow-x:auto}
 .griglia{border-collapse:collapse;min-width:600px;width:100%;font-size:12.5px}
 .griglia th{padding:8px 12px;background:var(--g50);border:1px solid var(--g200);font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.4px;text-align:center;white-space:nowrap;position:sticky;top:0;z-index:2}
@@ -225,7 +229,6 @@ input:checked+.tsl::after{transform:translateX(16px)}
       <button class="btn bpg" id="lbtn" style="width:100%;justify-content:center;padding:11px;font-size:14px;border-radius:8px;margin-top:4px">Accedi</button>
     </div>
     <div style="text-align:center;margin-top:18px;font-size:11px;color:var(--grigio-chiaro)">Medical Group · Gestione Sedi</div>
-    <div id="login-ver" style="text-align:center;margin-top:5px;font-size:10px;color:var(--g300)">…</div>
   </div>
 </div>
 
@@ -272,6 +275,7 @@ const T = n => `sedi_${n}`;
 const S = {
   user: null, token: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
+  ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
   page: 'griglia',
   // filtri griglia
   griglia: { search: '', catIds: [], sediSel: [] },
@@ -285,7 +289,11 @@ const S = {
 const NAV = [
   {id:'griglia',   l:'Informazioni',  ic:'📊', sec:'principale'},
   {id:'mappa',     l:'Mappa',         ic:'🗺', sec:'principale'},
+  {id:'asset',     l:'Asset',         ic:'🔧', sec:'principale'},
+  {id:'costi_ric', l:'Costi',         ic:'💰', sec:'principale'},
   {id:'sedi',      l:'Sedi',          ic:'📍', sec:'gestione', r:['admin']},
+  {id:'ragioni',   l:'Ragioni sociali',ic:'🏛', sec:'gestione', r:['admin']},
+  {id:'fornitori', l:'Fornitori',     ic:'🤝', sec:'gestione', r:['admin']},
   {id:'struttura', l:'Struttura',     ic:'🗂', sec:'gestione', r:['admin']},
   {id:'utenti',    l:'Utenti',        ic:'👥', sec:'gestione', r:['admin']},
   {id:'log',       l:'Log',           ic:'📋', sec:'gestione', r:['admin']},
@@ -335,25 +343,9 @@ function logoHTML(small=false){return `
       <div style="font-size:9px;letter-spacing:2px;color:var(--grigio-chiaro);text-transform:uppercase;font-weight:500">Gestione Sedi</div>
     </div>
   </div>`;}
-document.addEventListener('DOMContentLoaded', async ()=>{
+document.addEventListener('DOMContentLoaded',()=>{
   const tl=$('tb-logo'); if(tl) tl.innerHTML=logoHTML(true);
   const ll=$('login-logo'); if(ll) ll.innerHTML=logoHTML(false);
-
-  // Versione: data/ora ultimo commit GitHub
-  const verEl=$('login-ver');
-  if(verEl){
-    try{
-      const repo='ictmedicalgroup-sudo/sedi';
-      const res=await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`);
-      if(res.ok){
-        const [commit]=await res.json();
-        const d=new Date(commit.commit.committer.date);
-        const ds=d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'});
-        const ts=d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'});
-        verEl.textContent=`v ${ds} ${ts}`;
-      } else { verEl.textContent=''; }
-    }catch(e){ verEl.textContent=''; }
-  }
 });
 
 /* ══════════════════════════════════════════
@@ -389,19 +381,27 @@ async function logAct(azione,dettaglio){
    CARICAMENTO DATI
 ══════════════════════════════════════════ */
 async function loadAll(){
-  const [aree,sedi,categorie,sottocategorie,campi,valori,profili,log]=await Promise.all([
+  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,fornitori,costi]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('ragioni_sociali'),{ord:'nome.asc'}),
     db('GET',T('categorie'),{ord:'nome.asc'}),
     db('GET',T('sottocategorie'),{ord:'nome.asc'}),
     db('GET',T('campi'),{ord:'nome.asc'}),
     db('GET',T('valori')),
     db('GET',T('profili'),{ord:'cognome.asc'}),
     db('GET',T('log'),{ord:'created_at.desc',lim:'200'}),
+    db('GET',T('asset_categorie'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('asset_sottocategorie'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('asset'),{ord:'nome.asc'}),
+    db('GET',T('fornitori'),{ord:'nome.asc'}),
+    db('GET',T('costi'),{ord:'data_costo.desc'}),
   ]);
-  S.aree=aree||[];S.sedi=sedi||[];S.categorie=categorie||[];
+  S.aree=aree||[];S.sedi=sedi||[];S.ragioni=ragioni||[];S.categorie=categorie||[];
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
   S.valori=valori||[];S.profili=profili||[];S.log=log||[];
+  S.assetCat=assetCat||[];S.assetSubcat=assetSubcat||[];S.asset=asset||[];
+  S.fornitori=fornitori||[];S.costi=costi||[];
   // init sedi sel default (tutte)
   if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
   if(!S.mappa.sediSel.length)   S.mappa.sediSel=sediOrdinate().map(s=>s.id);
@@ -446,7 +446,11 @@ function renderPage(){
   pb.innerHTML=`<div style="padding:50px;text-align:center"><span class="spn" style="width:28px;height:28px"></span></div>`;
   if     (S.page==='griglia')   renderGriglia(pb);
   else if(S.page==='mappa')     renderMappa(pb);
+  else if(S.page==='asset')     renderAsset(pb);
+  else if(S.page==='costi_ric') renderCostiRiepilogo(pb);
   else if(S.page==='sedi')      renderSediPage(pb);
+  else if(S.page==='ragioni')   renderRagioni(pb);
+  else if(S.page==='fornitori') renderFornitori(pb);
   else if(S.page==='struttura') renderStruttura(pb);
   else if(S.page==='utenti')    renderUtenti(pb);
   else if(S.page==='log')       renderLog(pb);
@@ -1000,6 +1004,548 @@ function renderSidebarCampi(){
 /* ══════════════════════════════════════════
    PAGINA SEDI (CRUD)
 ══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
+   HELPERS
+══════════════════════════════════════════ */
+function fmtDate(d){ if(!d) return '—'; return new Date(d+'T00:00:00').toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'}); }
+function fmtMoney(v){ if(v===null||v===undefined) return '—'; return Number(v).toLocaleString('it-IT',{minimumFractionDigits:2,maximumFractionDigits:2})+' €'; }
+function assetNomeCategoria(assetId){
+  const a=S.asset.find(x=>x.id===assetId); if(!a) return '—';
+  const sc=S.assetSubcat.find(x=>x.id===a.sottocategoria_id);
+  const cat=S.assetCat.find(x=>x.id===sc?.categoria_id);
+  return [cat?.nome,sc?.nome].filter(Boolean).join(' › ');
+}
+function sedeNome(id){ return S.sedi.find(s=>s.id===id)?.nome||'—'; }
+function fornitoreNome(id){ return S.fornitori.find(f=>f.id===id)?.nome||'—'; }
+function ragioneNome(id){ return S.ragioni.find(r=>r.id===id)?.nome||'—'; }
+
+/* ══════════════════════════════════════════
+   PAGINA ASSET
+══════════════════════════════════════════ */
+function renderAsset(pb){
+  if(!S.asset_filter) S.asset_filter={search:'',catId:'',subcatId:'',sedeId:''};
+  const f=S.asset_filter;
+  let lista=S.asset.filter(a=>{
+    if(f.search&&!`${a.codice||''} ${a.nome} ${a.note||''}`.toLowerCase().includes(f.search.toLowerCase())) return false;
+    if(f.catId||f.subcatId){
+      const sc=S.assetSubcat.find(x=>x.id===a.sottocategoria_id);
+      if(f.subcatId&&sc?.id!==f.subcatId) return false;
+      if(f.catId&&sc?.categoria_id!==f.catId) return false;
+    }
+    return true;
+  });
+
+  pb.innerHTML=`<div class="fian">
+    <div class="filters-bar">
+      <input class="fi-sm" id="af-search" placeholder="🔍 Cerca asset..." value="${esc(f.search)}" style="width:200px"/>
+      <select class="fi-sm" id="af-cat">
+        <option value="">Tutte le categorie</option>
+        ${S.assetCat.map(c=>`<option value="${c.id}"${f.catId===c.id?' selected':''}>${esc(c.icona||'')} ${esc(c.nome)}</option>`).join('')}
+      </select>
+      <select class="fi-sm" id="af-sub">
+        <option value="">Tutte le sottocategorie</option>
+        ${S.assetSubcat.filter(sc=>!f.catId||sc.categoria_id===f.catId).map(sc=>`<option value="${sc.id}"${f.subcatId===sc.id?' selected':''}>${esc(sc.nome)}</option>`).join('')}
+      </select>
+      <button class="btn bpg bsm" id="a-add">+ Nuovo asset</button>
+    </div>
+    <div class="card">
+      <div class="ch"><span class="ct">🔧 Asset (${lista.length})</span></div>
+      ${!lista.length?`<div class="emp"><div class="emi">🔧</div><div class="emt">Nessun asset trovato</div></div>`:
+      `<table class="dt"><thead><tr><th>Codice</th><th>Nome</th><th>Categoria</th><th>Sede attuale</th><th>Costi</th><th>Azioni</th></tr></thead><tbody>
+      ${lista.map(a=>{
+        // sede attuale: ultima ubicazione attiva
+        const oggi=new Date().toISOString().slice(0,10);
+        const ub=S.assetSedi.filter(x=>x.asset_id===a.id&&x.data_da<=oggi&&(!x.data_a||x.data_a>=oggi)).sort((x,y)=>y.data_da.localeCompare(x.data_da))[0];
+        const costiA=S.costi.filter(x=>x.asset_id===a.id).length;
+        return `<tr>
+          <td><span style="font-family:monospace;font-size:12px;color:var(--g500)">${esc(a.codice||'—')}</span></td>
+          <td><div class="tn">${esc(a.nome)}</div>${a.note?`<div class="ts">${esc(a.note)}</div>`:''}</td>
+          <td><span style="font-size:12px">${esc(assetNomeCategoria(a.id))}</span></td>
+          <td>${ub?`<span class="bg bg-on">${esc(sedeNome(ub.sede_id))}</span>`:'<span class="bg bg-off">Non assegnato</span>'}</td>
+          <td>${costiA?`<span class="bg" style="background:var(--blue-xlight);color:var(--navy)">${costiA} costi</span>`:'—'}</td>
+          <td><div class="tda">
+            <button class="btn bs bsm" data-adoc="${a.id}" title="Documenti">📎</button>
+            <button class="btn bs bsm" data-aloc="${a.id}" title="Ubicazioni">📍</button>
+            <button class="btn bs bsm" data-acost="${a.id}" title="Costi">💰</button>
+            <button class="btn bs bsm" data-ae="${a.id}">✏</button>
+            <button class="btn bd bsm" data-ad="${a.id}">🗑</button>
+          </div></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
+    </div>
+  </div>`;
+
+  $('af-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  $('af-cat').addEventListener('change',e=>{f.catId=e.target.value;f.subcatId='';renderPage();});
+  $('af-sub').addEventListener('change',e=>{f.subcatId=e.target.value;renderPage();});
+  $('a-add').addEventListener('click',()=>openAssetModal(null));
+  pb.querySelectorAll('[data-ae]').forEach(b=>b.addEventListener('click',()=>openAssetModal(S.asset.find(x=>x.id===b.dataset.ae))));
+  pb.querySelectorAll('[data-ad]').forEach(b=>b.addEventListener('click',()=>{
+    const a=S.asset.find(x=>x.id===b.dataset.ad);
+    openConf(`Eliminare l'asset "${a?.nome}"? Tutti i costi e documenti associati verranno eliminati.`,async()=>{
+      await db('DELETE',T('asset'),{flt:`id=eq.${b.dataset.ad}`});
+      S.asset=S.asset.filter(x=>x.id!==b.dataset.ad); renderPage(); toast('Asset eliminato');
+    });
+  }));
+  pb.querySelectorAll('[data-adoc]').forEach(b=>b.addEventListener('click',()=>openDocumentiModal(b.dataset.adoc)));
+  pb.querySelectorAll('[data-aloc]').forEach(b=>b.addEventListener('click',()=>openUbicazioniModal(b.dataset.aloc)));
+  pb.querySelectorAll('[data-acost]').forEach(b=>b.addEventListener('click',()=>openCostiAssetModal(b.dataset.acost)));
+}
+
+function openAssetModal(a){
+  const body=`
+    <div class="fr">
+      <div class="fg"><div class="fl">Codice asset</div><input class="fi" id="am-cod" value="${esc(a?.codice||'')}"/></div>
+      <div class="fg"><div class="fl">Nome *</div><input class="fi" id="am-nome" value="${esc(a?.nome||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">Categoria</div>
+      <select class="fse" id="am-cat" onchange="document.getElementById('am-sub').innerHTML='<option value=\\'\\'>— Nessuna —</option>'+S.assetSubcat.filter(sc=>sc.categoria_id===this.value).map(sc=>'<option value=\\''+sc.id+'\\'>'+(sc.nome)+'</option>').join('')">
+        <option value="">— Nessuna —</option>
+        ${S.assetCat.map(cat=>`<option value="${cat.id}"${S.assetSubcat.find(sc=>sc.id===a?.sottocategoria_id)?.categoria_id===cat.id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Sottocategoria</div>
+      <select class="fse" id="am-sub">
+        <option value="">— Nessuna —</option>
+        ${(()=>{const catId=S.assetSubcat.find(sc=>sc.id===a?.sottocategoria_id)?.categoria_id||'';return S.assetSubcat.filter(sc=>!catId||sc.categoria_id===catId).map(sc=>`<option value="${sc.id}"${sc.id===a?.sottocategoria_id?' selected':''}>${esc(sc.nome)}</option>`).join('');})()}
+      </select>
+    </div>
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="am-note">${esc(a?.note||'')}</textarea></div>`;
+  openM(a?'✏ Modifica asset':'+ Nuovo asset',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('am-nome').value.trim(),cod=$('am-cod').value.trim();
+      const sub=$('am-sub').value,note=$('am-note').value.trim();
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      try{
+        const payload={nome,codice:cod||null,sottocategoria_id:sub||null,note:note||null};
+        if(a){
+          await db('PATCH',T('asset'),{flt:`id=eq.${a.id}`,body:payload});
+          S.asset=S.asset.map(x=>x.id===a.id?{...x,...payload}:x);
+        }else{
+          const [na]=await db('POST',T('asset'),{body:{...payload,created_by:S.user.id}});
+          S.asset.push(na);
+        }
+        closeM();renderPage();toast(a?'Asset aggiornato':'Asset aggiunto ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+}
+
+/* ── Ubicazioni ── */
+async function openUbicazioniModal(assetId){
+  const a=S.asset.find(x=>x.id===assetId);
+  const reload=async()=>{
+    const locs=await db('GET',T('asset_sedi'),{flt:`asset_id=eq.${assetId}`,ord:'data_da.desc'})||[];
+    S.assetSedi=[...S.assetSedi.filter(x=>x.asset_id!==assetId),...locs];
+    return locs;
+  };
+  const locs=await reload();
+  const render=()=>{
+    $('ub-list').innerHTML=!locs.length?`<div class="emp" style="padding:14px"><div class="ems">Nessuna ubicazione</div></div>`:
+      locs.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g100)">
+        <div>
+          <div style="font-weight:600;font-size:13px">${esc(sedeNome(l.sede_id))}</div>
+          <div style="font-size:11px;color:var(--g500)">${fmtDate(l.data_da)} → ${l.data_a?fmtDate(l.data_a):'in corso'}</div>
+          ${l.note?`<div style="font-size:11px;color:var(--g500)">${esc(l.note)}</div>`:''}
+        </div>
+        <button class="btn bd bsm" data-ubdel="${l.id}">🗑</button>
+      </div>`).join('');
+    $('ub-list').querySelectorAll('[data-ubdel]').forEach(b=>b.addEventListener('click',async()=>{
+      await db('DELETE',T('asset_sedi'),{flt:`id=eq.${b.dataset.ubdel}`});
+      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); render();
+    }));
+  };
+  openM(`📍 Ubicazioni — ${a?.nome}`,`
+    <div id="ub-list"></div>
+    <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px">+ Aggiungi ubicazione</div>
+      <div class="fg"><div class="fl">Sede</div>
+        <select class="fse" id="ub-sede">${S.sedi.filter(s=>s.attiva).map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select></div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Da</div><input class="fi" id="ub-da" type="date"/></div>
+        <div class="fg"><div class="fl">A (vuoto = in corso)</div><input class="fi" id="ub-a" type="date"/></div>
+      </div>
+      <div class="fg"><div class="fl">Note</div><input class="fi" id="ub-note"/></div>
+      <button class="btn bpg bsm" id="ub-save">Aggiungi</button>
+    </div>`,[{l:'Chiudi',c:'bs',a:closeM}]);
+  render();
+  $('ub-save').addEventListener('click',async()=>{
+    const sid=$('ub-sede').value,da=$('ub-da').value,a_=$('ub-a').value,note=$('ub-note').value.trim();
+    if(!sid||!da){toast('Sede e data inizio obbligatorie','err');return;}
+    const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,note:note||null}});
+    locs.unshift(nl); render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
+    toast('Ubicazione aggiunta ✅');
+  });
+}
+
+/* ── Costi asset ── */
+async function openCostiAssetModal(assetId){
+  const a=S.asset.find(x=>x.id===assetId);
+  const costi=await db('GET',T('costi'),{flt:`asset_id=eq.${assetId}`,ord:'data_costo.desc'})||[];
+  S.costi=[...S.costi.filter(x=>x.asset_id!==assetId),...costi];
+  const totale=costi.reduce((s,c)=>s+(parseFloat(c.importo)||0),0);
+  const renderList=()=>{
+    $('ca-list').innerHTML=!costi.length?`<div class="emp" style="padding:14px"><div class="ems">Nessun costo</div></div>`:
+      `<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--verde)">Totale: ${fmtMoney(totale)}</div>`+
+      costi.map(co=>`<div style="padding:8px 0;border-bottom:1px solid var(--g100)">
+        <div style="display:flex;justify-content:space-between;align-items:flex-start">
+          <div>
+            <span class="bg ${co.tipo==='periodico'?'bg-on':'bg-off'}">${co.tipo==='periodico'?'Periodico':'Una tantum'}</span>
+            <span style="font-weight:600;margin-left:8px">${fmtMoney(co.importo)}</span>
+          </div>
+          <button class="btn bd bsm" data-cdel="${co.id}">🗑</button>
+        </div>
+        <div style="font-size:11px;color:var(--g500);margin-top:3px">
+          ${co.fornitore_id?`👤 ${esc(fornitoreNome(co.fornitore_id))} · `:''}
+          📅 ${fmtDate(co.data_costo)}
+          ${co.data_da?` · ${fmtDate(co.data_da)} → ${co.data_a?fmtDate(co.data_a):'∞'}`:''}
+          ${co.sede_id?` · 📍 ${esc(sedeNome(co.sede_id))}`:''}
+          ${co.ragione_sociale_id?` · 🏛 ${esc(ragioneNome(co.ragione_sociale_id))}`:''}
+        </div>
+        ${co.descrizione?`<div style="font-size:12px;margin-top:2px">${esc(co.descrizione)}</div>`:''}
+      </div>`).join('');
+    $('ca-list').querySelectorAll('[data-cdel]').forEach(b=>b.addEventListener('click',async()=>{
+      await db('DELETE',T('costi'),{flt:`id=eq.${b.dataset.cdel}`});
+      costi.splice(costi.findIndex(x=>x.id===b.dataset.cdel),1); renderList();
+    }));
+  };
+  openM(`💰 Costi — ${a?.nome}`,`
+    <div id="ca-list"></div>
+    <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px">+ Aggiungi costo</div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Tipo</div>
+          <select class="fse" id="ca-tipo"><option value="una_tantum">Una tantum</option><option value="periodico">Periodico</option></select></div>
+        <div class="fg"><div class="fl">Importo (€)</div><input class="fi" id="ca-imp" type="number" step="0.01" min="0"/></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Data costo</div><input class="fi" id="ca-data" type="date"/></div>
+        <div class="fg"><div class="fl">Fornitore</div>
+          <select class="fse" id="ca-forn"><option value="">— Nessuno —</option>${S.fornitori.map(f=>`<option value="${f.id}">${esc(f.nome)}</option>`).join('')}</select></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Copertura da</div><input class="fi" id="ca-da" type="date"/></div>
+        <div class="fg"><div class="fl">Copertura a</div><input class="fi" id="ca-a" type="date"/></div>
+      </div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Sede utilizzo</div>
+          <select class="fse" id="ca-sede"><option value="">— Nessuna —</option>${S.sedi.filter(s=>s.attiva).map(s=>`<option value="${s.id}">${esc(s.nome)}</option>`).join('')}</select></div>
+        <div class="fg"><div class="fl">Ragione sociale</div>
+          <select class="fse" id="ca-rag"><option value="">— Nessuna —</option>${S.ragioni.map(r=>`<option value="${r.id}">${esc(r.nome)}</option>`).join('')}</select></div>
+      </div>
+      <div class="fg"><div class="fl">Descrizione</div><input class="fi" id="ca-desc"/></div>
+      <button class="btn bpg bsm" id="ca-save">Aggiungi costo</button>
+    </div>`,[{l:'Chiudi',c:'bs',a:closeM}]);
+  renderList();
+  $('ca-save').addEventListener('click',async()=>{
+    const tipo=$('ca-tipo').value,imp=$('ca-imp').value,data=$('ca-data').value;
+    if(!data){toast('Data costo obbligatoria','err');return;}
+    const payload={asset_id:assetId,tipo,importo:imp?parseFloat(imp):null,
+      data_costo:data,fornitore_id:$('ca-forn').value||null,
+      data_da:$('ca-da').value||null,data_a:$('ca-a').value||null,
+      sede_id:$('ca-sede').value||null,ragione_sociale_id:$('ca-rag').value||null,
+      descrizione:$('ca-desc').value.trim()||null,created_by:S.user.id};
+    const [nc]=await db('POST',T('costi'),{body:payload});
+    costi.unshift(nc); renderList();
+    $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
+    toast('Costo aggiunto ✅');
+  });
+}
+
+/* ── Documenti ── */
+async function openDocumentiModal(assetId){
+  const a=S.asset.find(x=>x.id===assetId);
+  const docs=await db('GET',T('documenti'),{flt:`asset_id=eq.${assetId}`,ord:'created_at.desc'})||[];
+  const TIPI=['contratto','offerta','informativa','manuale','garanzia','altro'];
+  const renderList=()=>{
+    $('doc-list').innerHTML=!docs.length?`<div class="emp" style="padding:14px"><div class="ems">Nessun documento</div></div>`:
+      docs.map(d=>`<div style="display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--g100)">
+        <span style="font-size:20px">📄</span>
+        <div style="flex:1">
+          <div style="font-weight:600;font-size:13px">${esc(d.nome_file)}</div>
+          <div style="font-size:11px;color:var(--g500)">${esc(d.tipo_doc||'')} · ${fmtDate(d.created_at)}${d.note?` · ${esc(d.note)}`:''}</div>
+        </div>
+        <button class="btn bs bsm" data-dload="${d.id}" data-path="${esc(d.storage_path)}" data-name="${esc(d.nome_file)}">⬇</button>
+        <button class="btn bd bsm" data-ddel="${d.id}" data-path="${esc(d.storage_path)}">🗑</button>
+      </div>`).join('');
+    $('doc-list').querySelectorAll('[data-dload]').forEach(b=>b.addEventListener('click',async()=>{
+      try{
+        const res=await fetch(`${CFG.URL}/storage/v1/object/sign/asset-documenti/${b.dataset.path}`,{
+          method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
+          body:JSON.stringify({expiresIn:60})});
+        const {signedURL}=await res.json();
+        const link=document.createElement('a');link.href=CFG.URL+signedURL;link.download=b.dataset.name;link.click();
+      }catch(e){toast('Errore download: '+e.message,'err');}
+    }));
+    $('doc-list').querySelectorAll('[data-ddel]').forEach(b=>b.addEventListener('click',async()=>{
+      await fetch(`${CFG.URL}/storage/v1/object/asset-documenti/${b.dataset.path}`,{method:'DELETE',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});
+      await db('DELETE',T('documenti'),{flt:`id=eq.${b.dataset.ddel}`});
+      docs.splice(docs.findIndex(x=>x.id===b.dataset.ddel),1); renderList(); toast('Documento eliminato');
+    }));
+  };
+  openM(`📎 Documenti — ${a?.nome}`,`
+    <div id="doc-list"></div>
+    <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px">+ Carica documento</div>
+      <div class="fg"><div class="fl">File *</div><input class="fi" id="doc-file" type="file"/></div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Tipo documento</div>
+          <select class="fse" id="doc-tipo">${TIPI.map(t=>`<option value="${t}">${t.charAt(0).toUpperCase()+t.slice(1)}</option>`).join('')}</select></div>
+        <div class="fg"><div class="fl">Note</div><input class="fi" id="doc-note"/></div>
+      </div>
+      <div id="doc-progress" style="display:none;margin-bottom:8px">
+        <div style="background:var(--g200);border-radius:4px;height:6px"><div id="doc-bar" style="background:var(--verde);height:6px;border-radius:4px;width:0%;transition:width .3s"></div></div>
+      </div>
+      <button class="btn bpg bsm" id="doc-upload">⬆ Carica</button>
+    </div>`,[{l:'Chiudi',c:'bs',a:closeM}]);
+  renderList();
+  $('doc-upload').addEventListener('click',async()=>{
+    const file=$('doc-file').files[0];
+    if(!file){toast('Seleziona un file','err');return;}
+    const path=`${assetId}/${Date.now()}_${file.name.replace(/[^a-zA-Z0-9._-]/g,'_')}`;
+    $('doc-progress').style.display='';
+    $('doc-bar').style.width='30%';
+    try{
+      const uploadRes=await fetch(`${CFG.URL}/storage/v1/object/asset-documenti/${path}`,{
+        method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`,'Content-Type':file.type||'application/octet-stream','x-upsert':'false'},
+        body:file});
+      if(!uploadRes.ok){const e=await uploadRes.json();throw new Error(e.message||'Upload fallito');}
+      $('doc-bar').style.width='80%';
+      const [nd]=await db('POST',T('documenti'),{body:{asset_id:assetId,nome_file:file.name,
+        storage_path:path,tipo_doc:$('doc-tipo').value,dimensione:file.size,
+        mime_type:file.type,note:$('doc-note').value.trim()||null,created_by:S.user.id}});
+      docs.unshift(nd); $('doc-bar').style.width='100%';
+      setTimeout(()=>{$('doc-progress').style.display='none';$('doc-bar').style.width='0%';},500);
+      $('doc-file').value='';$('doc-note').value='';
+      renderList(); toast('Documento caricato ✅');
+    }catch(e){$('doc-progress').style.display='none';toast(e.message,'err');}
+  });
+}
+
+/* ══════════════════════════════════════════
+   RIEPILOGO COSTI
+══════════════════════════════════════════ */
+function renderCostiRiepilogo(pb){
+  if(!S.costi_filter) S.costi_filter={anno:'',sedeId:'',fornitoreId:'',catId:''};
+  const f=S.costi_filter;
+  const anni=[...new Set(S.costi.map(c=>c.data_costo?.slice(0,4)).filter(Boolean))].sort((a,b)=>b-a);
+  let costi=S.costi.filter(c=>{
+    if(f.anno&&c.data_costo?.slice(0,4)!==f.anno) return false;
+    if(f.sedeId&&c.sede_id!==f.sedeId) return false;
+    if(f.fornitoreId&&c.fornitore_id!==f.fornitoreId) return false;
+    if(f.catId){
+      const a=S.asset.find(x=>x.id===c.asset_id);
+      const sc=S.assetSubcat.find(x=>x.id===a?.sottocategoria_id);
+      if(sc?.categoria_id!==f.catId) return false;
+    }
+    return true;
+  });
+  const totale=costi.reduce((s,c)=>s+(parseFloat(c.importo)||0),0);
+
+  // aggrega per sede
+  const perSede={};
+  costi.forEach(c=>{const k=c.sede_id||'__nessuna';if(!perSede[k])perSede[k]=0;perSede[k]+=parseFloat(c.importo)||0;});
+
+  // aggrega per fornitore
+  const perForn={};
+  costi.forEach(c=>{const k=c.fornitore_id||'__nessuno';if(!perForn[k])perForn[k]=0;perForn[k]+=parseFloat(c.importo)||0;});
+
+  pb.innerHTML=`<div class="fian">
+    <div class="filters-bar">
+      <select class="fi-sm" id="cr-anno"><option value="">Tutti gli anni</option>${anni.map(a=>`<option value="${a}"${f.anno===a?' selected':''}>${a}</option>`).join('')}</select>
+      <select class="fi-sm" id="cr-sede"><option value="">Tutte le sedi</option>${S.sedi.map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</select>
+      <select class="fi-sm" id="cr-forn"><option value="">Tutti i fornitori</option>${S.fornitori.map(f2=>`<option value="${f2.id}"${f.fornitoreId===f2.id?' selected':''}>${esc(f2.nome)}</option>`).join('')}</select>
+      <select class="fi-sm" id="cr-cat"><option value="">Tutte le categorie</option>${S.assetCat.map(c2=>`<option value="${c2.id}"${f.catId===c2.id?' selected':''}>${esc(c2.nome)}</option>`).join('')}</select>
+    </div>
+    <div class="sg" style="margin-bottom:20px">
+      <div class="sc"><div class="si" style="background:var(--blue-xlight)">💰</div><div><div class="sl">Totale filtrato</div><div class="sv">${fmtMoney(totale)}</div></div></div>
+      <div class="sc"><div class="si" style="background:var(--green-light)">📋</div><div><div class="sl">Numero costi</div><div class="sv">${costi.length}</div></div></div>
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px">
+      <div class="card">
+        <div class="ch"><span class="ct">Per sede</span></div>
+        <table class="dt"><thead><tr><th>Sede</th><th style="text-align:right">Totale</th></tr></thead><tbody>
+        ${Object.entries(perSede).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr>
+          <td>${k==='__nessuna'?'<em style="color:var(--g400)">Non specificata</em>':esc(sedeNome(k))}</td>
+          <td style="text-align:right;font-family:monospace;font-weight:600">${fmtMoney(v)}</td>
+        </tr>`).join('')}
+        </tbody></table>
+      </div>
+      <div class="card">
+        <div class="ch"><span class="ct">Per fornitore</span></div>
+        <table class="dt"><thead><tr><th>Fornitore</th><th style="text-align:right">Totale</th></tr></thead><tbody>
+        ${Object.entries(perForn).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<tr>
+          <td>${k==='__nessuno'?'<em style="color:var(--g400)">Non specificato</em>':esc(fornitoreNome(k))}</td>
+          <td style="text-align:right;font-family:monospace;font-weight:600">${fmtMoney(v)}</td>
+        </tr>`).join('')}
+        </tbody></table>
+      </div>
+    </div>
+    <div class="card" style="margin-top:20px">
+      <div class="ch"><span class="ct">Dettaglio costi (${costi.length})</span></div>
+      <table class="dt"><thead><tr><th>Asset</th><th>Tipo</th><th>Fornitore</th><th>Data</th><th>Sede</th><th style="text-align:right">Importo</th></tr></thead><tbody>
+      ${costi.map(c=>{const a=S.asset.find(x=>x.id===c.asset_id);return `<tr>
+        <td><div class="tn">${esc(a?.nome||'—')}</div><div class="ts">${esc(assetNomeCategoria(c.asset_id))}</div></td>
+        <td><span class="bg ${c.tipo==='periodico'?'bg-on':'bg-off'}">${c.tipo==='periodico'?'Periodico':'Una tantum'}</span></td>
+        <td>${esc(fornitoreNome(c.fornitore_id))}</td>
+        <td>${fmtDate(c.data_costo)}</td>
+        <td>${c.sede_id?esc(sedeNome(c.sede_id)):'—'}</td>
+        <td style="text-align:right;font-family:monospace;font-weight:600">${fmtMoney(c.importo)}</td>
+      </tr>`;}).join('')}
+      </tbody></table>
+    </div>
+  </div>`;
+
+  $('cr-anno').addEventListener('change',e=>{f.anno=e.target.value;renderPage();});
+  $('cr-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
+  $('cr-forn').addEventListener('change',e=>{f.fornitoreId=e.target.value;renderPage();});
+  $('cr-cat').addEventListener('change',e=>{f.catId=e.target.value;renderPage();});
+}
+
+/* ══════════════════════════════════════════
+   FORNITORI
+══════════════════════════════════════════ */
+function renderFornitori(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch"><span class="ct">🤝 Fornitori (${S.fornitori.length})</span><button class="btn bpg bsm" id="f-add">+ Nuovo fornitore</button></div>
+    ${!S.fornitori.length?`<div class="emp"><div class="emi">🤝</div><div class="emt">Nessun fornitore</div></div>`:
+    `<table class="dt"><thead><tr><th>Nome</th><th>P.IVA</th><th>Telefono</th><th>Email</th><th>Azioni</th></tr></thead><tbody>
+    ${S.fornitori.map(f=>`<tr>
+      <td><div class="tn">${esc(f.nome)}</div>${f.indirizzo?`<div class="ts">${esc(f.indirizzo)}</div>`:''}</td>
+      <td>${esc(f.piva||'—')}</td><td>${esc(f.telefono||'—')}</td><td>${esc(f.email||'—')}</td>
+      <td><div class="tda">
+        <button class="btn bs bsm" data-fe="${f.id}">✏</button>
+        <button class="btn bd bsm" data-fd="${f.id}">🗑</button>
+      </div></td>
+    </tr>`).join('')}</tbody></table>`}
+  </div></div>`;
+  $('f-add').addEventListener('click',()=>openFornitoreModal(null));
+  pb.querySelectorAll('[data-fe]').forEach(b=>b.addEventListener('click',()=>openFornitoreModal(S.fornitori.find(x=>x.id===b.dataset.fe))));
+  pb.querySelectorAll('[data-fd]').forEach(b=>b.addEventListener('click',()=>{
+    const f=S.fornitori.find(x=>x.id===b.dataset.fd);
+    openConf(`Eliminare il fornitore "${f?.nome}"?`,async()=>{
+      await db('DELETE',T('fornitori'),{flt:`id=eq.${b.dataset.fd}`});
+      S.fornitori=S.fornitori.filter(x=>x.id!==b.dataset.fd); renderPage(); toast('Fornitore eliminato');
+    });
+  }));
+}
+
+function openFornitoreModal(f){
+  const body=`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="fm-nome" value="${esc(f?.nome||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Partita IVA</div><input class="fi" id="fm-piva" value="${esc(f?.piva||'')}"/></div>
+      <div class="fg"><div class="fl">Telefono</div><input class="fi" id="fm-tel" value="${esc(f?.telefono||'')}"/></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Email</div><input class="fi" id="fm-email" type="email" value="${esc(f?.email||'')}"/></div>
+      <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="fm-ind" value="${esc(f?.indirizzo||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="fm-note" style="min-height:60px">${esc(f?.note||'')}</textarea></div>`;
+  openM(f?'✏ Modifica fornitore':'+ Nuovo fornitore',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('fm-nome').value.trim();
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      const payload={nome,piva:$('fm-piva').value.trim()||null,telefono:$('fm-tel').value.trim()||null,
+        email:$('fm-email').value.trim()||null,indirizzo:$('fm-ind').value.trim()||null,note:$('fm-note').value.trim()||null};
+      try{
+        if(f){
+          await db('PATCH',T('fornitori'),{flt:`id=eq.${f.id}`,body:payload});
+          S.fornitori=S.fornitori.map(x=>x.id===f.id?{...x,...payload}:x);
+        }else{
+          const [nf]=await db('POST',T('fornitori'),{body:payload}); S.fornitori.push(nf);
+        }
+        closeM();renderPage();toast(f?'Fornitore aggiornato':'Fornitore aggiunto ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+}
+
+function buildAssetStrutturaHTML(){
+  if(!S.assetCat.length) return `<div class="emp"><div class="emi">🔧</div><div class="emt">Nessuna categoria asset</div><div class="ems">Es. Macchine diagnostiche, Software…</div></div>`;
+  return S.assetCat.map(cat=>`
+    <div class="str-cat">
+      <div class="str-cat-hdr">
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${cat.icona||'📦'}</span><span style="font-weight:700">${esc(cat.nome)}</span></div>
+        <div class="tda">
+          <button class="btn bpg bsm" data-assc-add="${cat.id}">+ Sottocategoria</button>
+          <button class="btn bs bsm" data-ace="${cat.id}">✏</button>
+          <button class="btn bd bsm" data-acd="${cat.id}">🗑</button>
+        </div>
+      </div>
+      <div class="str-cat-body">
+        ${S.assetSubcat.filter(sc=>sc.categoria_id===cat.id).map(sc=>`
+          <div class="str-subcat">
+            <div class="str-subcat-hdr">
+              <span style="font-weight:600;color:var(--g700)">${esc(sc.nome)}</span>
+              <div class="tda">
+                <button class="btn bs bsm" data-asce="${sc.id}">✏</button>
+                <button class="btn bd bsm" data-ascd="${sc.id}">🗑</button>
+              </div>
+            </div>
+          </div>`).join('')||`<div style="font-size:12px;color:var(--g400);padding:4px 0">Nessuna sottocategoria</div>`}
+      </div>
+    </div>`).join('');
+}
+
+function refreshAssetStruttura(){
+  const sb=$('acat-body'); if(!sb) return;
+  sb.innerHTML=buildAssetStrutturaHTML();
+  bindAssetStrutturaEvents();
+}
+
+function bindAssetStrutturaEvents(){
+  const sb=$('acat-body'); if(!sb) return;
+  sb.querySelectorAll('[data-ace]').forEach(b=>b.addEventListener('click',()=>openAssetCatModal(S.assetCat.find(x=>x.id===b.dataset.ace))));
+  sb.querySelectorAll('[data-acd]').forEach(b=>b.addEventListener('click',()=>{
+    const c=S.assetCat.find(x=>x.id===b.dataset.acd);
+    openConf(`Eliminare la categoria "${c?.nome}"?`,async()=>{
+      await db('DELETE',T('asset_categorie'),{flt:`id=eq.${b.dataset.acd}`});
+      S.assetCat=S.assetCat.filter(x=>x.id!==b.dataset.acd);
+      S.assetSubcat=S.assetSubcat.filter(x=>x.categoria_id!==b.dataset.acd);
+      refreshAssetStruttura(); toast('Categoria eliminata');
+    });
+  }));
+  sb.querySelectorAll('[data-assc-add]').forEach(b=>b.addEventListener('click',()=>openAssetSubcatModal(null,b.dataset.asscAdd)));
+  sb.querySelectorAll('[data-asce]').forEach(b=>b.addEventListener('click',()=>openAssetSubcatModal(S.assetSubcat.find(x=>x.id===b.dataset.asce),null)));
+  sb.querySelectorAll('[data-ascd]').forEach(b=>b.addEventListener('click',()=>{
+    const sc=S.assetSubcat.find(x=>x.id===b.dataset.ascd);
+    openConf(`Eliminare la sottocategoria "${sc?.nome}"?`,async()=>{
+      await db('DELETE',T('asset_sottocategorie'),{flt:`id=eq.${b.dataset.ascd}`});
+      S.assetSubcat=S.assetSubcat.filter(x=>x.id!==b.dataset.ascd);
+      refreshAssetStruttura(); toast('Sottocategoria eliminata');
+    });
+  }));
+}
+
+function openAssetCatModal(cat){
+  openM(cat?'✏ Modifica categoria asset':'+ Nuova categoria asset',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="ac-nome" value="${esc(cat?.nome||'')}"/></div>
+    <div class="fg"><div class="fl">Icona (emoji)</div><input class="fi" id="ac-ico" value="${esc(cat?.icona||'📦')}" style="width:80px"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('ac-nome').value.trim(),icona=$('ac-ico').value.trim()||'📦';
+    if(!nome){toast('Nome obbligatorio','err');return;}
+    if(cat){await db('PATCH',T('asset_categorie'),{flt:`id=eq.${cat.id}`,body:{nome,icona}});S.assetCat=S.assetCat.map(x=>x.id===cat.id?{...x,nome,icona}:x);}
+    else{const[nc]=await db('POST',T('asset_categorie'),{body:{nome,icona,ordine:S.assetCat.length}});S.assetCat.push(nc);}
+    closeM();refreshAssetStruttura();toast(cat?'Categoria aggiornata':'Categoria aggiunta ✅');
+  }}]);
+}
+
+function openAssetSubcatModal(sc,catId){
+  const cid=catId||(sc?.categoria_id);
+  openM(sc?'✏ Modifica sottocategoria':'+ Nuova sottocategoria',`
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="asc-nome" value="${esc(sc?.nome||'')}"/></div>`,
+  [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
+    const nome=$('asc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
+    if(sc){await db('PATCH',T('asset_sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome}});S.assetSubcat=S.assetSubcat.map(x=>x.id===sc.id?{...x,nome}:x);}
+    else{const[ns]=await db('POST',T('asset_sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.assetSubcat.filter(x=>x.categoria_id===cid).length}});S.assetSubcat.push(ns);}
+    closeM();refreshAssetStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
+  }}]);
+}
+
 function renderSediPage(pb){
   // raggruppa sedi per area, ordinate per campo ordine
   const perArea={};
@@ -1167,6 +1713,13 @@ function renderStruttura(pb){
       <div class="cb" id="str-body">${buildStrutturaHTML()}</div>
     </div>
     </div>
+    <!-- CATEGORIE ASSET -->
+    <div style="grid-column:1/-1">
+    <div class="card">
+      <div class="ch"><span class="ct">🔧 Categorie asset</span><button class="btn bpg bsm" id="acat-add">+ Categoria asset</button></div>
+      <div class="cb" id="acat-body">${buildAssetStrutturaHTML()}</div>
+    </div>
+    </div>
   </div>`;
 
   $('ar-add').addEventListener('click',()=>openAreaModal(null));
@@ -1179,7 +1732,9 @@ function renderStruttura(pb){
     });
   }));
   $('cat-add').addEventListener('click',()=>openCatModal(null));
+  $('acat-add').addEventListener('click',()=>openAssetCatModal(null));
   bindStrutturaEvents(pb);
+  bindAssetStrutturaEvents();
 }
 
 function buildStrutturaHTML(){
