@@ -269,7 +269,7 @@ const T = n => `sedi_${n}`;
 ══════════════════════════════════════════ */
 const S = {
   user: null, token: null,
-  aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
+  aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [], ragioni: [],
   page: 'griglia',
   // filtri griglia
   griglia: { search: '', catIds: [], sediSel: [] },
@@ -284,6 +284,7 @@ const NAV = [
   {id:'griglia',   l:'Informazioni',  ic:'📊', sec:'principale'},
   {id:'mappa',     l:'Mappa',         ic:'🗺', sec:'principale'},
   {id:'sedi',      l:'Sedi',          ic:'📍', sec:'gestione', r:['admin']},
+  {id:'ragioni',    l:'Ragioni sociali',ic:'🏛', sec:'gestione', r:['admin']},
   {id:'struttura', l:'Struttura',     ic:'🗂', sec:'gestione', r:['admin']},
   {id:'utenti',    l:'Utenti',        ic:'👥', sec:'gestione', r:['admin']},
   {id:'log',       l:'Log',           ic:'📋', sec:'gestione', r:['admin']},
@@ -371,9 +372,10 @@ async function logAct(azione,dettaglio){
    CARICAMENTO DATI
 ══════════════════════════════════════════ */
 async function loadAll(){
-  const [aree,sedi,categorie,sottocategorie,campi,valori,profili,log]=await Promise.all([
+  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
+    db('GET',T('ragioni_sociali'),{ord:'nome.asc'}),
     db('GET',T('categorie'),{ord:'nome.asc'}),
     db('GET',T('sottocategorie'),{ord:'nome.asc'}),
     db('GET',T('campi'),{ord:'nome.asc'}),
@@ -381,7 +383,7 @@ async function loadAll(){
     db('GET',T('profili'),{ord:'cognome.asc'}),
     db('GET',T('log'),{ord:'created_at.desc',lim:'200'}),
   ]);
-  S.aree=aree||[];S.sedi=sedi||[];S.categorie=categorie||[];
+  S.aree=aree||[];S.sedi=sedi||[];S.ragioni=ragioni||[];S.categorie=categorie||[];
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
   S.valori=valori||[];S.profili=profili||[];S.log=log||[];
   // init sedi sel default (tutte)
@@ -429,6 +431,7 @@ function renderPage(){
   if     (S.page==='griglia')   renderGriglia(pb);
   else if(S.page==='mappa')     renderMappa(pb);
   else if(S.page==='sedi')      renderSediPage(pb);
+  else if(S.page==='ragioni')   renderRagioni(pb);
   else if(S.page==='struttura') renderStruttura(pb);
   else if(S.page==='utenti')    renderUtenti(pb);
   else if(S.page==='log')       renderLog(pb);
@@ -980,6 +983,78 @@ function renderSidebarCampi(){
 }
 
 /* ══════════════════════════════════════════
+   PAGINA RAGIONI SOCIALI
+══════════════════════════════════════════ */
+function renderRagioni(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch">
+      <span class="ct">🏛 Ragioni sociali (${S.ragioni.length})</span>
+      <button class="btn bpg bsm" id="r-add">+ Nuova ragione sociale</button>
+    </div>
+    ${!S.ragioni.length
+      ?`<div class="emp"><div class="emi">🏛</div><div class="emt">Nessuna ragione sociale</div><div class="ems">Aggiungi le società del gruppo</div></div>`
+      :`<table class="dt"><thead><tr><th>Ragione sociale</th><th>Partita IVA</th><th>Indirizzo</th><th>Sedi associate</th><th>Azioni</th></tr></thead><tbody>
+      ${S.ragioni.map(r=>{
+        const cnt=S.sedi.filter(s=>s.ragione_sociale_id===r.id).length;
+        return `<tr>
+          <td><div class="tn">${esc(r.nome)}</div>${r.note?`<div class="ts">${esc(r.note)}</div>`:''}</td>
+          <td>${esc(r.piva||'—')}</td>
+          <td>${esc(r.indirizzo||'—')}</td>
+          <td><span class="bg ${cnt?'bg-on':'bg-off'}">${cnt} ${cnt===1?'sede':'sedi'}</span></td>
+          <td><div class="tda">
+            <button class="btn bs bsm" data-re="${r.id}">✏</button>
+            <button class="btn bd bsm" data-rd="${r.id}">🗑</button>
+          </div></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
+  </div></div>`;
+
+  $('r-add').addEventListener('click',()=>openRagioneModal(null));
+  pb.querySelectorAll('[data-re]').forEach(b=>b.addEventListener('click',()=>openRagioneModal(S.ragioni.find(x=>x.id===b.dataset.re))));
+  pb.querySelectorAll('[data-rd]').forEach(b=>b.addEventListener('click',()=>{
+    const r=S.ragioni.find(x=>x.id===b.dataset.rd);
+    const cnt=S.sedi.filter(s=>s.ragione_sociale_id===r?.id).length;
+    openConf(`Eliminare "${r?.nome}"?${cnt>0?` Attenzione: ${cnt} sedi sono associate.`:''}`,async()=>{
+      await db('DELETE',T('ragioni_sociali'),{flt:`id=eq.${b.dataset.rd}`});
+      S.ragioni=S.ragioni.filter(x=>x.id!==b.dataset.rd);
+      renderPage(); toast('Ragione sociale eliminata');
+    });
+  }));
+}
+
+function openRagioneModal(r){
+  const body=`
+    <div class="fg"><div class="fl">Nome / Ragione sociale *</div><input class="fi" id="rm-nome" value="${esc(r?.nome||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Partita IVA</div><input class="fi" id="rm-piva" value="${esc(r?.piva||'')}"/></div>
+      <div class="fg"><div class="fl">Codice fiscale</div><input class="fi" id="rm-cf" value="${esc(r?.codice_fiscale||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">Indirizzo sede legale</div><input class="fi" id="rm-ind" value="${esc(r?.indirizzo||'')}"/></div>
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="rm-note" style="min-height:60px">${esc(r?.note||'')}</textarea></div>`;
+  openM(r?'✏ Modifica ragione sociale':'+ Nuova ragione sociale',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('rm-nome').value.trim(),piva=$('rm-piva').value.trim();
+      const cf=$('rm-cf').value.trim(),ind=$('rm-ind').value.trim(),note=$('rm-note').value.trim();
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      try{
+        const payload={nome,piva:piva||null,codice_fiscale:cf||null,indirizzo:ind||null,note:note||null};
+        if(r){
+          await db('PATCH',T('ragioni_sociali'),{flt:`id=eq.${r.id}`,body:payload});
+          S.ragioni=S.ragioni.map(x=>x.id===r.id?{...x,...payload}:x);
+        }else{
+          const [nr]=await db('POST',T('ragioni_sociali'),{body:payload});
+          S.ragioni.push(nr);
+          logAct('ragione_create',`Nuova ragione sociale: ${nome}`);
+        }
+        closeM(); renderPage(); toast(r?'Ragione sociale aggiornata':'Ragione sociale aggiunta ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+}
+
+/* ══════════════════════════════════════════
    PAGINA SEDI (CRUD)
 ══════════════════════════════════════════ */
 function renderSediPage(pb){
@@ -1004,11 +1079,12 @@ function renderSediPage(pb){
         <span style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px">📍 ${esc(area)}</span>
         <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
       </div>
-      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Ragione sociale</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody class="sortable-area" data-area="${esc(area)}">
         ${sediArea.map(s=>`<tr data-id="${s.id}" style="cursor:grab">
           <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
           <td><div class="tn">${esc(s.nome)}</div></td>
+          <td style="font-size:12px">${esc(S.ragioni.find(r=>r.id===s.ragione_sociale_id)?.nome||'—')}</td>
           <td>${esc(s.indirizzo||'—')}</td>
           <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
           <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
@@ -1086,6 +1162,11 @@ function openSedeModal(sede){
         <option value="">— Nessuna area —</option>
         ${S.aree.map(a=>`<option value="${a.id}"${sede?.area_id===a.id?' selected':''}>${esc(a.nome)}</option>`).join('')}
       </select></div>
+    <div class="fg"><div class="fl">Ragione sociale</div>
+      <select class="fse" id="sm-rag">
+        <option value="">— Nessuna —</option>
+        ${S.ragioni.map(r=>`<option value="${r.id}"${sede?.ragione_sociale_id===r.id?' selected':''}>${esc(r.nome)}</option>`).join('')}
+      </select></div>
     <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="sm-ind" value="${esc(sede?.indirizzo||'')}"/></div>
     <div class="fr">
       <div class="fg"><div class="fl">Latitudine</div><input class="fi" id="sm-lat" type="number" step="0.0001" value="${sede?.lat||''}" placeholder="es. 43.7228"/></div>
@@ -1102,10 +1183,10 @@ function openSedeModal(sede){
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=$('sm-nome').value.trim(),area=$('sm-area').value,ind=$('sm-ind').value.trim();
       const lat=parseFloat($('sm-lat').value)||null,lng=parseFloat($('sm-lng').value)||null;
-      const attiva=$('sm-att').checked;
+      const attiva=$('sm-att').checked,rag=$('sm-rag').value;
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva};
+        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva,ragione_sociale_id:rag||null};
         if(sede){
           await db('PATCH',T('sedi'),{flt:`id=eq.${sede.id}`,body:payload});
           S.sedi=S.sedi.map(s=>s.id===sede.id?{...s,...payload}:s);
