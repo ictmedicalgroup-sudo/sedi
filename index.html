@@ -77,7 +77,7 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 /* ── Modal ── */
 .mo{position:fixed;inset:0;background:rgba(74,76,77,.55);backdrop-filter:blur(4px);display:flex;align-items:center;justify-content:center;z-index:500;padding:20px}
 .mo.hid{display:none}
-.mb{background:#fff;border-radius:var(--rlg);box-shadow:var(--sh-lg);width:100%;max-width:480px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
+.mb{background:#fff;border-radius:var(--rlg);box-shadow:var(--sh-lg);width:80%;max-width:900px;overflow:hidden;max-height:90vh;display:flex;flex-direction:column}
 .mh{padding:18px 20px;border-bottom:1px solid var(--g200);display:flex;align-items:center;justify-content:space-between;flex-shrink:0}
 .mt{font-size:15px;font-weight:700}.mbdy{padding:20px;overflow-y:auto;flex:1}.mf{padding:14px 20px;border-top:1px solid var(--g200);display:flex;gap:9px;justify-content:flex-end;flex-shrink:0}
 
@@ -1201,7 +1201,30 @@ async function openCostiAssetModal(assetId){
   const costi=await db('GET',T('costi'),{flt:`asset_id=eq.${assetId}`,ord:'data_costo.desc'})||[];
   S.costi=[...S.costi.filter(x=>x.asset_id!==assetId),...costi];
   const totale=costi.reduce((s,c)=>s+(parseFloat(c.importo)||0),0);
+  let editingCosto=null;
+  const setEditMode=(co)=>{
+    editingCosto=co;
+    $('ca-form-title').textContent=co?'✏ Modifica costo':'+ Aggiungi costo';
+    $('ca-save').textContent=co?'Salva modifiche':'Aggiungi costo';
+    $('ca-cancel-edit').style.display=co?'':'none';
+    if(co){
+      $('ca-tipo').value=co.tipo||'una_tantum';
+      $('ca-imp').value=co.importo||'';
+      $('ca-data').value=co.data_costo||'';
+      $('ca-forn').value=co.fornitore_id||'';
+      $('ca-da').value=co.data_da||'';
+      $('ca-a').value=co.data_a||'';
+      $('ca-sede').value=co.sede_id||'';
+      $('ca-rag').value=co.ragione_sociale_id||'';
+      $('ca-desc').value=co.descrizione||'';
+    } else {
+      $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
+      $('ca-forn').value='';$('ca-da').value='';$('ca-a').value='';
+      $('ca-sede').value='';$('ca-rag').value='';$('ca-tipo').value='una_tantum';
+    }
+  };
   const renderList=()=>{
+    const totale=costi.reduce((s,c)=>s+(parseFloat(c.importo)||0),0);
     $('ca-list').innerHTML=!costi.length?`<div class="emp" style="padding:14px"><div class="ems">Nessun costo</div></div>`:
       `<div style="font-weight:700;font-size:13px;margin-bottom:8px;color:var(--verde)">Totale: ${fmtMoney(totale)}</div>`+
       costi.map(co=>`<div style="padding:8px 0;border-bottom:1px solid var(--g100)">
@@ -1210,7 +1233,10 @@ async function openCostiAssetModal(assetId){
             <span class="bg ${co.tipo==='periodico'?'bg-on':'bg-off'}">${co.tipo==='periodico'?'Periodico':'Una tantum'}</span>
             <span style="font-weight:600;margin-left:8px">${fmtMoney(co.importo)}</span>
           </div>
-          <button class="btn bd bsm" data-cdel="${co.id}">🗑</button>
+          <div class="tda">
+            <button class="btn bs bsm" data-cedit="${co.id}">✏</button>
+            <button class="btn bd bsm" data-cdel="${co.id}">🗑</button>
+          </div>
         </div>
         <div style="font-size:11px;color:var(--g500);margin-top:3px">
           ${co.fornitore_id?`👤 ${esc(fornitoreNome(co.fornitore_id))} · `:''}
@@ -1223,13 +1249,19 @@ async function openCostiAssetModal(assetId){
       </div>`).join('');
     $('ca-list').querySelectorAll('[data-cdel]').forEach(b=>b.addEventListener('click',async()=>{
       await db('DELETE',T('costi'),{flt:`id=eq.${b.dataset.cdel}`});
-      costi.splice(costi.findIndex(x=>x.id===b.dataset.cdel),1); renderList();
+      costi.splice(costi.findIndex(x=>x.id===b.dataset.cdel),1);
+      if(editingCosto?.id===b.dataset.cdel) setEditMode(null);
+      renderList();
+    }));
+    $('ca-list').querySelectorAll('[data-cedit]').forEach(b=>b.addEventListener('click',()=>{
+      const co=costi.find(x=>x.id===b.dataset.cedit);
+      setEditMode(co);
     }));
   };
   openM(`💰 Costi — ${a?.nome}`,`
     <div id="ca-list"></div>
     <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
-      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px">+ Aggiungi costo</div>
+      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:8px" id="ca-form-title">+ Aggiungi costo</div>
       <div class="fr">
         <div class="fg"><div class="fl">Tipo</div>
           <select class="fse" id="ca-tipo"><option value="una_tantum">Una tantum</option><option value="periodico">Periodico</option></select></div>
@@ -1251,21 +1283,33 @@ async function openCostiAssetModal(assetId){
           <select class="fse" id="ca-rag"><option value="">— Nessuna —</option>${S.ragioni.map(r=>`<option value="${r.id}">${esc(r.nome)}</option>`).join('')}</select></div>
       </div>
       <div class="fg"><div class="fl">Descrizione</div><input class="fi" id="ca-desc"/></div>
-      <button class="btn bpg bsm" id="ca-save">Aggiungi costo</button>
+      <div style="display:flex;gap:8px">
+        <button class="btn bpg bsm" id="ca-save">Aggiungi costo</button>
+        <button class="btn bs bsm" id="ca-cancel-edit" style="display:none">Annulla modifica</button>
+      </div>
     </div>`,[{l:'Chiudi',c:'bs',a:closeM}]);
   renderList();
+  $('ca-cancel-edit').addEventListener('click',()=>setEditMode(null));
   $('ca-save').addEventListener('click',async()=>{
     const tipo=$('ca-tipo').value,imp=$('ca-imp').value,data=$('ca-data').value;
     if(!data){toast('Data costo obbligatoria','err');return;}
-    const payload={asset_id:assetId,tipo,importo:imp?parseFloat(imp):null,
+    const payload={tipo,importo:imp?parseFloat(imp):null,
       data_costo:data,fornitore_id:$('ca-forn').value||null,
       data_da:$('ca-da').value||null,data_a:$('ca-a').value||null,
       sede_id:$('ca-sede').value||null,ragione_sociale_id:$('ca-rag').value||null,
-      descrizione:$('ca-desc').value.trim()||null,created_by:S.user.id};
-    const [nc]=await db('POST',T('costi'),{body:payload});
-    costi.unshift(nc); renderList();
-    $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
-    toast('Costo aggiunto ✅');
+      descrizione:$('ca-desc').value.trim()||null};
+    if(editingCosto){
+      await db('PATCH',T('costi'),{flt:`id=eq.${editingCosto.id}`,body:payload});
+      Object.assign(editingCosto,payload);
+      setEditMode(null);
+      toast('Costo aggiornato ✅');
+    }else{
+      const [nc]=await db('POST',T('costi'),{body:{...payload,asset_id:assetId,created_by:S.user.id}});
+      costi.unshift(nc);
+      $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
+      toast('Costo aggiunto ✅');
+    }
+    renderList();
   });
 }
 
