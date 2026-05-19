@@ -229,6 +229,7 @@ input:checked+.tsl::after{transform:translateX(16px)}
       <button class="btn bpg" id="lbtn" style="width:100%;justify-content:center;padding:11px;font-size:14px;border-radius:8px;margin-top:4px">Accedi</button>
     </div>
     <div style="text-align:center;margin-top:18px;font-size:11px;color:var(--grigio-chiaro)">Medical Group · Gestione Sedi</div>
+    <div id="login-ver" style="text-align:center;margin-top:5px;font-size:10px;color:var(--g300)">…</div>
   </div>
 </div>
 
@@ -343,9 +344,18 @@ function logoHTML(small=false){return `
       <div style="font-size:9px;letter-spacing:2px;color:var(--grigio-chiaro);text-transform:uppercase;font-weight:500">Gestione Sedi</div>
     </div>
   </div>`;}
-document.addEventListener('DOMContentLoaded',()=>{
+document.addEventListener('DOMContentLoaded',async ()=>{
   const tl=$('tb-logo'); if(tl) tl.innerHTML=logoHTML(true);
   const ll=$('login-logo'); if(ll) ll.innerHTML=logoHTML(false);
+  const verEl=$('login-ver');
+  if(verEl){
+    try{
+      const repo='ictmedicalgroup-sudo/sedi';
+      const res=await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`);
+      if(res.ok){const [commit]=await res.json();const d=new Date(commit.commit.committer.date);verEl.textContent=`v ${d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;}
+      else verEl.textContent='';
+    }catch(e){verEl.textContent='';}
+  }
 });
 
 /* ══════════════════════════════════════════
@@ -1059,7 +1069,7 @@ function renderAsset(pb){
         const costiA=S.costi.filter(x=>x.asset_id===a.id).length;
         return `<tr>
           <td><span style="font-family:monospace;font-size:12px;color:var(--g500)">${esc(a.codice||'—')}</span></td>
-          <td><div class="tn">${esc(a.nome)}</div>${a.note?`<div class="ts">${esc(a.note)}</div>`:''}</td>
+          <td><div class="tn">${esc(a.nome)}</div>${a.marca?`<div class="ts">${esc(a.marca)}</div>`:''}</td>
           <td><span style="font-size:12px">${esc(assetNomeCategoria(a.id))}</span></td>
           <td>${ub?`<span class="bg bg-on">${esc(sedeNome(ub.sede_id))}</span>`:'<span class="bg bg-off">Non assegnato</span>'}</td>
           <td>${costiA?`<span class="bg" style="background:var(--blue-xlight);color:var(--navy)">${costiA} costi</span>`:'—'}</td>
@@ -1099,6 +1109,10 @@ function openAssetModal(a){
       <div class="fg"><div class="fl">Codice asset</div><input class="fi" id="am-cod" value="${esc(a?.codice||'')}"/></div>
       <div class="fg"><div class="fl">Nome *</div><input class="fi" id="am-nome" value="${esc(a?.nome||'')}"/></div>
     </div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Marca</div><input class="fi" id="am-marca" value="${esc(a?.marca||'')}"/></div>
+      <div class="fg"></div>
+    </div>
     <div class="fg"><div class="fl">Categoria</div>
       <select class="fse" id="am-cat" onchange="document.getElementById('am-sub').innerHTML='<option value=\\'\\'>— Nessuna —</option>'+S.assetSubcat.filter(sc=>sc.categoria_id===this.value).map(sc=>'<option value=\\''+sc.id+'\\'>'+(sc.nome)+'</option>').join('')">
         <option value="">— Nessuna —</option>
@@ -1119,7 +1133,8 @@ function openAssetModal(a){
       const sub=$('am-sub').value,note=$('am-note').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const payload={nome,codice:cod||null,sottocategoria_id:sub||null,note:note||null};
+        const marca=$('am-marca').value.trim();
+        const payload={nome,codice:cod||null,marca:marca||null,sottocategoria_id:sub||null,note:note||null};
         if(a){
           await db('PATCH',T('asset'),{flt:`id=eq.${a.id}`,body:payload});
           S.asset=S.asset.map(x=>x.id===a.id?{...x,...payload}:x);
@@ -1544,6 +1559,77 @@ function openAssetSubcatModal(sc,catId){
     else{const[ns]=await db('POST',T('asset_sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.assetSubcat.filter(x=>x.categoria_id===cid).length}});S.assetSubcat.push(ns);}
     closeM();refreshAssetStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
   }}]);
+}
+
+/* ══════════════════════════════════════════
+   PAGINA RAGIONI SOCIALI
+══════════════════════════════════════════ */
+function renderRagioni(pb){
+  const ragioni=S.ragioni||[];
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch">
+      <span class="ct">🏛 Ragioni sociali (${ragioni.length})</span>
+      <button class="btn bpg bsm" id="r-add">+ Nuova ragione sociale</button>
+    </div>
+    ${!ragioni.length
+      ?`<div class="emp"><div class="emi">🏛</div><div class="emt">Nessuna ragione sociale</div><div class="ems">Aggiungi le società del gruppo</div></div>`
+      :`<table class="dt"><thead><tr><th>Ragione sociale</th><th>Partita IVA</th><th>Indirizzo</th><th>Sedi associate</th><th>Azioni</th></tr></thead><tbody>
+      ${ragioni.map(r=>{
+        const cnt=S.sedi.filter(s=>s.ragione_sociale_id===r.id).length;
+        return `<tr>
+          <td><div class="tn">${esc(r.nome)}</div>${r.note?`<div class="ts">${esc(r.note)}</div>`:''}</td>
+          <td>${esc(r.piva||'—')}</td>
+          <td>${esc(r.indirizzo||'—')}</td>
+          <td><span class="bg ${cnt?'bg-on':'bg-off'}">${cnt} ${cnt===1?'sede':'sedi'}</span></td>
+          <td><div class="tda">
+            <button class="btn bs bsm" data-re="${r.id}">✏</button>
+            <button class="btn bd bsm" data-rd="${r.id}">🗑</button>
+          </div></td>
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
+  </div></div>`;
+  $('r-add').addEventListener('click',()=>openRagioneModal(null));
+  pb.querySelectorAll('[data-re]').forEach(b=>b.addEventListener('click',()=>openRagioneModal(S.ragioni.find(x=>x.id===b.dataset.re))));
+  pb.querySelectorAll('[data-rd]').forEach(b=>b.addEventListener('click',()=>{
+    const r=S.ragioni.find(x=>x.id===b.dataset.rd);
+    const cnt=S.sedi.filter(s=>s.ragione_sociale_id===r?.id).length;
+    openConf(`Eliminare "${r?.nome}"?${cnt>0?` Attenzione: ${cnt} sedi sono associate.`:''}`,async()=>{
+      await db('DELETE',T('ragioni_sociali'),{flt:`id=eq.${b.dataset.rd}`});
+      S.ragioni=S.ragioni.filter(x=>x.id!==b.dataset.rd);
+      renderPage(); toast('Ragione sociale eliminata');
+    });
+  }));
+}
+
+function openRagioneModal(r){
+  const body=`
+    <div class="fg"><div class="fl">Nome / Ragione sociale *</div><input class="fi" id="rm-nome" value="${esc(r?.nome||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Partita IVA</div><input class="fi" id="rm-piva" value="${esc(r?.piva||'')}"/></div>
+      <div class="fg"><div class="fl">Codice fiscale</div><input class="fi" id="rm-cf" value="${esc(r?.codice_fiscale||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">Indirizzo sede legale</div><input class="fi" id="rm-ind" value="${esc(r?.indirizzo||'')}"/></div>
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="rm-note" style="min-height:60px">${esc(r?.note||'')}</textarea></div>`;
+  openM(r?'✏ Modifica ragione sociale':'+ Nuova ragione sociale',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('rm-nome').value.trim();
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      const payload={nome,piva:$('rm-piva').value.trim()||null,codice_fiscale:$('rm-cf').value.trim()||null,
+        indirizzo:$('rm-ind').value.trim()||null,note:$('rm-note').value.trim()||null};
+      try{
+        if(r){
+          await db('PATCH',T('ragioni_sociali'),{flt:`id=eq.${r.id}`,body:payload});
+          S.ragioni=S.ragioni.map(x=>x.id===r.id?{...x,...payload}:x);
+        }else{
+          const [nr]=await db('POST',T('ragioni_sociali'),{body:payload});
+          S.ragioni.push(nr);
+        }
+        closeM(); renderPage(); toast(r?'Aggiornata':'Aggiunta ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
 }
 
 function renderSediPage(pb){
