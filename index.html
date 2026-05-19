@@ -1280,7 +1280,7 @@ async function openDocumentiModal(assetId){
         <span style="font-size:20px">📄</span>
         <div style="flex:1">
           <div style="font-weight:600;font-size:13px">${esc(d.nome_file)}</div>
-          <div style="font-size:11px;color:var(--g500)">${esc(d.tipo_doc||'')} · ${fmtDate(d.created_at)}${d.note?` · ${esc(d.note)}`:''}</div>
+          <div style="font-size:11px;color:var(--g500)">${esc(d.tipo_doc||'')} · ${fmtDt(d.created_at)}${d.note?` · ${esc(d.note)}`:''}</div>
         </div>
         <button class="btn bs bsm" data-dload="${d.id}" data-path="${esc(d.storage_path)}" data-name="${esc(d.nome_file)}">⬇</button>
         <button class="btn bd bsm" data-ddel="${d.id}" data-path="${esc(d.storage_path)}">🗑</button>
