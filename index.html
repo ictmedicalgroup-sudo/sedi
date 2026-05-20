@@ -38,6 +38,11 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 .tnb{display:flex;align-items:center;gap:6px;padding:0 16px;font-size:12.5px;font-weight:600;color:var(--g500);cursor:pointer;border:none;background:none;font-family:'Raleway',sans-serif;letter-spacing:.3px;border-bottom:2.5px solid transparent;transition:all .17s;text-transform:uppercase}
 .tnb:hover{color:var(--g700);border-bottom-color:var(--g300)}
 .tnb.active{color:var(--verde);border-bottom-color:var(--verde)}
+.tnb-wrap{position:relative;display:flex;align-items:stretch}
+.tnb-dropdown{position:absolute;top:100%;right:0;background:#fff;border:1px solid var(--g200);border-radius:var(--r);box-shadow:var(--sh-md);z-index:300;min-width:180px;padding:4px 0}
+.tnb-dd-item{display:flex;align-items:center;gap:8px;padding:9px 16px;font-size:13px;font-weight:600;color:var(--g700);cursor:pointer;border:none;background:none;font-family:'Raleway',sans-serif;width:100%;text-align:left;transition:background .15s}
+.tnb-dd-item:hover{background:var(--g50)}
+.tnb-dd-item.active{color:var(--verde)}
 #main{flex:1;display:flex;flex-direction:column}
 #pb{padding:24px;flex:1}
 
@@ -64,7 +69,7 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 /* ── Badges ── */
 .bg{display:inline-flex;align-items:center;gap:3px;padding:2px 8px;border-radius:20px;font-size:11px;font-weight:700;white-space:nowrap}
 .bg-on{background:var(--green-light);color:#1A7A40}.bg-off{background:var(--g100);color:var(--g500)}
-.bg-adm{background:var(--navy);color:#fff}.bg-usr{background:var(--g100);color:var(--g700)}
+.bg-adm{background:var(--navy);color:#fff}.bg-usr{background:var(--g100);color:var(--g700)}.bg-asset{background:#EEF5E3;color:#4a6b20}
 
 /* ── Forms ── */
 .fg{display:flex;flex-direction:column;gap:5px;margin-bottom:14px}
@@ -287,18 +292,22 @@ const S = {
 /* ══════════════════════════════════════════
    NAV
 ══════════════════════════════════════════ */
-const NAV = [
-  {id:'griglia',   l:'Informazioni',  ic:'📊', sec:'principale'},
-  {id:'mappa',     l:'Mappa',         ic:'🗺', sec:'principale'},
-  {id:'asset',     l:'Asset',         ic:'🔧', sec:'principale'},
-  {id:'costi_ric', l:'Costi',         ic:'💰', sec:'principale'},
-  {id:'sedi',      l:'Sedi',          ic:'📍', sec:'gestione', r:['admin']},
-  {id:'ragioni',   l:'Ragioni sociali',ic:'🏛', sec:'gestione', r:['admin']},
-  {id:'fornitori', l:'Fornitori',     ic:'🤝', sec:'gestione', r:['admin']},
-  {id:'struttura', l:'Struttura',     ic:'🗂', sec:'gestione', r:['admin']},
-  {id:'utenti',    l:'Utenti',        ic:'👥', sec:'gestione', r:['admin']},
-  {id:'log',       l:'Log',           ic:'📋', sec:'gestione', r:['admin']},
+const NAV_MAIN = [
+  {id:'asset',     l:'Asset',         ic:'🔧', r:['admin','utente','asset']},
+  {id:'costi_ric', l:'Costi',         ic:'💰', r:['admin','utente','asset']},
+  {id:'fornitori', l:'Fornitori',     ic:'🤝', r:['admin','asset']},
+  {id:'griglia',   l:'Informazioni',  ic:'📊', r:['admin','utente']},
+  {id:'mappa',     l:'Mappa',         ic:'🗺', r:['admin','utente']},
 ];
+const NAV_ADMIN = [
+  {id:'sedi',      l:'Sedi',          ic:'📍'},
+  {id:'ragioni',   l:'Ragioni sociali',ic:'🏛'},
+  {id:'struttura', l:'Struttura',     ic:'🗂'},
+  {id:'utenti',    l:'Utenti',        ic:'👥'},
+  {id:'log',       l:'Log',           ic:'📋'},
+];
+// compatibilità con codice che usa NAV
+const NAV = [...NAV_MAIN, ...NAV_ADMIN.map(n=>({...n,r:['admin']}))];
 
 /* ══════════════════════════════════════════
    UTILITIES
@@ -414,7 +423,8 @@ async function loadAll(){
   S.fornitori=fornitori||[];S.costi=costi||[];
   // init sedi sel default (tutte)
   if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
-  if(!S.mappa.sediSel.length)   S.mappa.sediSel=sediOrdinate().map(s=>s.id);
+  // mappa: default nessuna sede selezionata (popup tutti chiusi)
+  if(!S.mappa._initialized) { S.mappa.sediSel=[]; S.mappa._initialized=true; }
 }
 
 
@@ -439,14 +449,34 @@ function getValore(sedeId,campoId){
    SIDEBAR / TOPBAR
 ══════════════════════════════════════════ */
 function renderSidebar(){
-  const items=NAV.filter(n=>!n.r||n.r.includes(S.user?.ruolo));
-  $('tb-nav').innerHTML=items.map(n=>`
+  const ruolo=S.user?.ruolo;
+  const mainItems=NAV_MAIN.filter(n=>!n.r||n.r.includes(ruolo));
+  const adminDropdown=ruolo==='admin'?`
+    <div class="tnb-wrap" id="admin-wrap">
+      <button class="tnb${NAV_ADMIN.some(n=>n.id===S.page)?' active':''}" id="admin-btn">
+        <span>⚙</span>Admin<span style="font-size:9px;margin-left:2px">▼</span>
+      </button>
+      <div class="tnb-dropdown hid" id="admin-dd">
+        ${NAV_ADMIN.map(n=>`<button class="tnb-dd-item${S.page===n.id?' active':''}" data-pg="${n.id}"><span>${n.ic}</span>${n.l}</button>`).join('')}
+      </div>
+    </div>`:'';
+  $('tb-nav').innerHTML=mainItems.map(n=>`
     <button class="tnb${S.page===n.id?' active':''}" data-pg="${n.id}">
       <span>${n.ic}</span>${n.l}
-    </button>`).join('');
-  $('tb-nav').querySelectorAll('.tnb').forEach(b=>b.addEventListener('click',()=>goPage(b.dataset.pg)));
+    </button>`).join('')+adminDropdown;
+  $('tb-nav').querySelectorAll('.tnb[data-pg]').forEach(b=>b.addEventListener('click',()=>goPage(b.dataset.pg)));
+  $('tb-nav').querySelectorAll('.tnb-dd-item').forEach(b=>b.addEventListener('click',()=>{
+    $('admin-dd')?.classList.add('hid'); goPage(b.dataset.pg);
+  }));
+  $('admin-btn')?.addEventListener('click',e=>{
+    e.stopPropagation();
+    $('admin-dd')?.classList.toggle('hid');
+  });
+  document.addEventListener('click',()=>$('admin-dd')?.classList.add('hid'),{once:true});
   $('tb-user').textContent=S.user?`${S.user.nome} ${S.user.cognome}`:'';
-  $('tb-role').innerHTML=S.user?`<span class="bg ${S.user.ruolo==='admin'?'bg-adm':'bg-usr'}">${S.user.ruolo==='admin'?'Admin':'Utente'}</span>`:'';
+  const rb={'admin':'bg-adm','utente':'bg-usr','asset':'bg-asset'};
+  const rl={'admin':'Admin','utente':'Utente','asset':'Asset'};
+  $('tb-role').innerHTML=S.user?`<span class="bg ${rb[ruolo]||'bg-usr'}">${rl[ruolo]||ruolo}</span>`:'';
 }
 function goPage(pg){
   S.page=pg; renderSidebar(); renderPage();
@@ -1069,7 +1099,7 @@ function renderAsset(pb){
         const costiA=S.costi.filter(x=>x.asset_id===a.id).length;
         return `<tr>
           <td><span style="font-family:monospace;font-size:12px;color:var(--g500)">${esc(a.codice||'—')}</span></td>
-          <td><div class="tn">${esc(a.nome)}</div>${a.marca?`<div class="ts">${esc(a.marca)}</div>`:''}</td>
+          <td><div class="tn">${esc(a.nome)}</div><div class="ts">${[a.marca,a.seriale,a.anno?'Anno '+a.anno:''].filter(Boolean).join(' · ')}</div></td>
           <td><span style="font-size:12px">${esc(assetNomeCategoria(a.id))}</span></td>
           <td>${ub?`<span class="bg bg-on">${esc(sedeNome(ub.sede_id))}</span>`:'<span class="bg bg-off">Non assegnato</span>'}</td>
           <td>${costiA?`<span class="bg" style="background:var(--blue-xlight);color:var(--navy)">${costiA} costi</span>`:'—'}</td>
@@ -1111,6 +1141,10 @@ function openAssetModal(a){
     </div>
     <div class="fr">
       <div class="fg"><div class="fl">Marca</div><input class="fi" id="am-marca" value="${esc(a?.marca||'')}"/></div>
+      <div class="fg"><div class="fl">Seriale</div><input class="fi" id="am-seriale" value="${esc(a?.seriale||'')}"/></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Anno</div><input class="fi" id="am-anno" type="number" min="1900" max="2100" value="${a?.anno||''}" placeholder="es. 2021"/></div>
       <div class="fg"></div>
     </div>
     <div class="fg"><div class="fl">Categoria</div>
@@ -1133,8 +1167,8 @@ function openAssetModal(a){
       const sub=$('am-sub').value,note=$('am-note').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const marca=$('am-marca').value.trim();
-        const payload={nome,codice:cod||null,marca:marca||null,sottocategoria_id:sub||null,note:note||null};
+        const marca=$('am-marca').value.trim(),seriale=$('am-seriale').value.trim(),anno=$('am-anno').value;
+        const payload={nome,codice:cod||null,marca:marca||null,seriale:seriale||null,anno:anno?parseInt(anno):null,sottocategoria_id:sub||null,note:note||null};
         if(a){
           await db('PATCH',T('asset'),{flt:`id=eq.${a.id}`,body:payload});
           S.asset=S.asset.map(x=>x.id===a.id?{...x,...payload}:x);
@@ -2075,7 +2109,7 @@ function renderUtenti(pb){
     `<table class="dt"><thead><tr><th>Utente</th><th>Ruolo</th><th>Stato</th><th>Azioni</th></tr></thead><tbody>
     ${S.profili.map(u=>`<tr>
       <td><div class="tn">${esc(u.cognome+' '+u.nome)}</div><div class="ts">${esc(u.email)}</div></td>
-      <td><span class="bg ${u.ruolo==='admin'?'bg-adm':'bg-usr'}">${u.ruolo==='admin'?'Admin':'Utente'}</span></td>
+      <td><span class="bg ${{admin:'bg-adm',asset:'bg-asset',utente:'bg-usr'}[u.ruolo]||'bg-usr'}">${{admin:'Admin',asset:'Asset',utente:'Utente'}[u.ruolo]||u.ruolo}</span></td>
       <td><span class="bg ${u.attivo?'bg-on':'bg-off'}">${u.attivo?'● Attivo':'○ Inattivo'}</span></td>
       <td><div class="tda">
         <button class="btn bs bsm" data-ue="${u.id}">✏</button>
@@ -2106,7 +2140,8 @@ function openUtenteModal(u){
     <div class="fg"><div class="fl">Ruolo</div>
       <select class="fse" id="ur">
         <option value="utente"${u?.ruolo==='utente'?' selected':''}>Utente (solo lettura)</option>
-        <option value="admin"${u?.ruolo==='admin'?' selected':''}>Admin (lettura + scrittura)</option>
+        <option value="asset"${u?.ruolo==='asset'?' selected':''}>Asset (asset, costi, fornitori)</option>
+        <option value="admin"${u?.ruolo==='admin'?' selected':''}>Admin (accesso completo)</option>
       </select></div>
     <div class="fg"><label class="tw">
       <div class="tg"><input type="checkbox" id="ua" ${u?.attivo!==false?'checked':''}><span class="tsl"></span></div>
