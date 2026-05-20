@@ -400,7 +400,7 @@ async function logAct(azione,dettaglio){
    CARICAMENTO DATI
 ══════════════════════════════════════════ */
 async function loadAll(){
-  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,fornitori,costi]=await Promise.all([
+  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,assetSedi,fornitori,costi]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('ragioni_sociali'),{ord:'nome.asc'}),
@@ -413,6 +413,7 @@ async function loadAll(){
     db('GET',T('asset_categorie'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('asset_sottocategorie'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('asset'),{ord:'nome.asc'}),
+    db('GET',T('asset_sedi'),{ord:'data_da.desc'}),
     db('GET',T('fornitori'),{ord:'nome.asc'}),
     db('GET',T('costi'),{ord:'data_costo.desc'}),
   ]);
@@ -420,7 +421,7 @@ async function loadAll(){
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
   S.valori=valori||[];S.profili=profili||[];S.log=log||[];
   S.assetCat=assetCat||[];S.assetSubcat=assetSubcat||[];S.asset=asset||[];
-  S.fornitori=fornitori||[];S.costi=costi||[];
+  S.assetSedi=assetSedi||[];S.fornitori=fornitori||[];S.costi=costi||[];
   // init sedi sel default (tutte)
   if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
   // mappa: default nessuna sede selezionata (popup tutti chiusi)
