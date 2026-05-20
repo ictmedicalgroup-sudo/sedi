@@ -361,7 +361,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
     try{
       const repo='ictmedicalgroup-sudo/sedi';
       const res=await fetch(`https://api.github.com/repos/${repo}/commits?per_page=1`);
-      if(res.ok){const [commit]=await res.json();const d=new Date(commit.commit.committer.date);verEl.textContent=`v ${d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;}
+      if(res.ok){const [commit]=await res.json();const d=new Date(commit.commit.committer.date);verEl.textContent=`build ${d.toLocaleDateString('it-IT',{day:'2-digit',month:'2-digit',year:'numeric'})} ${d.toLocaleTimeString('it-IT',{hour:'2-digit',minute:'2-digit'})}`;}
       else verEl.textContent='';
     }catch(e){verEl.textContent='';}
   }
@@ -1204,7 +1204,7 @@ async function openUbicazioniModal(assetId){
       </div>`).join('');
     $('ub-list').querySelectorAll('[data-ubdel]').forEach(b=>b.addEventListener('click',async()=>{
       await db('DELETE',T('asset_sedi'),{flt:`id=eq.${b.dataset.ubdel}`});
-      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); render();
+      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); S._assetDirty=true; render();
     }));
   };
   openM(`📍 Ubicazioni — ${a?.nome}`,`
@@ -1225,7 +1225,7 @@ async function openUbicazioniModal(assetId){
     const sid=$('ub-sede').value,da=$('ub-da').value,a_=$('ub-a').value,note=$('ub-note').value.trim();
     if(!sid||!da){toast('Sede e data inizio obbligatorie','err');return;}
     const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,note:note||null}});
-    locs.unshift(nl); render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
+    locs.unshift(nl); S._assetDirty=true; render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
     toast('Ubicazione aggiunta ✅');
   });
 }
@@ -1286,7 +1286,7 @@ async function openCostiAssetModal(assetId){
       await db('DELETE',T('costi'),{flt:`id=eq.${b.dataset.cdel}`});
       costi.splice(costi.findIndex(x=>x.id===b.dataset.cdel),1);
       if(editingCosto?.id===b.dataset.cdel) setEditMode(null);
-      renderList();
+      S._assetDirty=true; renderList();
     }));
     $('ca-list').querySelectorAll('[data-cedit]').forEach(b=>b.addEventListener('click',()=>{
       const co=costi.find(x=>x.id===b.dataset.cedit);
@@ -1337,11 +1337,11 @@ async function openCostiAssetModal(assetId){
       await db('PATCH',T('costi'),{flt:`id=eq.${editingCosto.id}`,body:payload});
       Object.assign(editingCosto,payload);
       setEditMode(null);
-      toast('Costo aggiornato ✅');
+      S._assetDirty=true; toast('Costo aggiornato ✅');
     }else{
       const [nc]=await db('POST',T('costi'),{body:{...payload,asset_id:assetId,created_by:S.user.id}});
       costi.unshift(nc);
-      $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
+      S._assetDirty=true; $('ca-imp').value='';$('ca-data').value='';$('ca-desc').value='';
       toast('Costo aggiunto ✅');
     }
     renderList();
@@ -1376,7 +1376,7 @@ async function openDocumentiModal(assetId){
     $('doc-list').querySelectorAll('[data-ddel]').forEach(b=>b.addEventListener('click',async()=>{
       await fetch(`${CFG.URL}/storage/v1/object/asset-documenti/${b.dataset.path}`,{method:'DELETE',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});
       await db('DELETE',T('documenti'),{flt:`id=eq.${b.dataset.ddel}`});
-      docs.splice(docs.findIndex(x=>x.id===b.dataset.ddel),1); renderList(); toast('Documento eliminato');
+      docs.splice(docs.findIndex(x=>x.id===b.dataset.ddel),1); S._assetDirty=true; renderList(); toast('Documento eliminato');
     }));
   };
   openM(`📎 Documenti — ${a?.nome}`,`
@@ -1410,7 +1410,7 @@ async function openDocumentiModal(assetId){
       const [nd]=await db('POST',T('documenti'),{body:{asset_id:assetId,nome_file:file.name,
         storage_path:path,tipo_doc:$('doc-tipo').value,dimensione:file.size,
         mime_type:file.type,note:$('doc-note').value.trim()||null,created_by:S.user.id}});
-      docs.unshift(nd); $('doc-bar').style.width='100%';
+      docs.unshift(nd); S._assetDirty=true; $('doc-bar').style.width='100%';
       setTimeout(()=>{$('doc-progress').style.display='none';$('doc-bar').style.width='0%';},500);
       $('doc-file').value='';$('doc-note').value='';
       renderList(); toast('Documento caricato ✅');
@@ -2235,7 +2235,11 @@ function openM(title,body,btns=[]){
   btns.forEach((b,i)=>$(`mb${i}`).addEventListener('click',b.a));
   $('mov').classList.remove('hid');
 }
-function closeM(){$('mov').classList.add('hid');}
+function closeM(){
+  $('mov').classList.add('hid');
+  // se siamo nella pagina asset e c'è stato un aggiornamento, ri-renderizza
+  if(S._assetDirty&&S.page==='asset'){S._assetDirty=false;renderPage();}
+}
 function openConf(msg,onOk){
   openM('⚠ Conferma',`<p style="color:var(--g700);font-size:13.5px;line-height:1.6">${esc(msg)}</p>`,[
     {l:'Annulla',c:'bs',a:closeM},
