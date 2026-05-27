@@ -49,8 +49,17 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 
 /* ── Login ── */
 #lp{min-height:100vh;display:flex;align-items:center;justify-content:center;background:var(--g50)}
-.lcard{background:#fff;border-radius:var(--rlg);padding:38px;width:100%;max-width:420px;box-shadow:0 4px 32px rgba(74,76,77,.10);border:1px solid var(--g200)}
-.llogo{margin-bottom:26px}
+.lcard{background:#fff;border-radius:var(--rlg);padding:40px 38px;width:100%;max-width:420px;box-shadow:var(--sh-lg);border:1px solid var(--g200)}
+.lcard h2{font-size:22px;font-weight:700;color:var(--navy);margin:20px 0 6px}
+.lcard p{font-size:13px;color:var(--g500);margin-bottom:24px}
+.lfield{margin-bottom:16px}
+.lfield label{display:block;font-size:12px;font-weight:600;color:var(--g700);letter-spacing:.5px;margin-bottom:6px}
+.lfield input{width:100%;padding:11px 14px;border:1px solid var(--g200);border-radius:var(--rsm);background:#EEF5E3;font-family:'Raleway',sans-serif;font-size:14px;color:var(--g900);outline:none;transition:border-color .2s}
+.lfield input:focus{border-color:var(--verde)}
+.lbtn{width:100%;padding:12px;background:var(--verde);color:#fff;border:none;border-radius:var(--rsm);font-family:'Raleway',sans-serif;font-size:14px;font-weight:700;cursor:pointer;transition:opacity .2s}
+.lbtn:hover{opacity:.88}
+.lerr{background:var(--red-light);color:var(--red);border-radius:var(--rsm);padding:10px 14px;font-size:13px;margin-bottom:16px;display:none}
+.llogo{margin-bottom:0}
 
 /* ── Cards ── */
 .card{background:#fff;border-radius:var(--rlg);box-shadow:var(--sh-sm);border:1px solid var(--g200);overflow:hidden;margin-bottom:20px}
@@ -223,19 +232,13 @@ input:checked+.tsl::after{transform:translateX(16px)}
 <!-- LOGIN -->
 <div id="lp">
   <div class="lcard">
-    <div class="llogo"><div id="login-logo"></div>
-      <div style="margin-top:14px;font-size:13px;color:var(--grigio);text-align:center">Accesso riservato al personale autorizzato</div>
-    </div>
-    <div id="lerr" class="alert ae hid" style="margin-bottom:14px"></div>
-    <div style="display:flex;flex-direction:column;gap:12px">
-      <div class="fg" style="margin:0"><label class="fl" style="color:var(--grigio);font-size:11px">Username</label>
-        <input class="fi" id="lem" type="email" autocomplete="username" style="background:#EEF5E3;border-color:var(--g200);border-radius:8px"/></div>
-      <div class="fg" style="margin:0"><label class="fl" style="color:var(--grigio);font-size:11px">Password</label>
-        <input class="fi" id="lpw" type="password" autocomplete="current-password" style="background:#EEF5E3;border-color:var(--g200);border-radius:8px"/></div>
-      <button class="btn bpg" id="lbtn" style="width:100%;justify-content:center;padding:11px;font-size:14px;border-radius:8px;margin-top:4px">Accedi</button>
-    </div>
-    <div style="text-align:center;margin-top:18px;font-size:11px;color:var(--grigio-chiaro)">Medical Group · Gestione Sedi</div>
-    <div id="login-ver" style="text-align:center;margin-top:5px;font-size:10px;color:var(--g300)">…</div>
+    <div id="login-logo"></div>
+    <div style="margin-top:14px;font-size:13px;color:var(--grigio);text-align:center">Accesso riservato al personale autorizzato</div>
+    <div id="lerr" class="lerr" style="margin-top:14px;"></div>
+    <div class="lfield" style="margin-top:12px;"><label>E-Mail</label><input type="email" id="lem" placeholder="nome@medicalgroup.it" autocomplete="username"/></div>
+    <div class="lfield"><label>Password</label><input type="password" id="lpw" placeholder="••••••••" autocomplete="current-password"/></div>
+    <button class="lbtn" id="lbtn">Accedi</button>
+    <div id="login-ver" style="margin-top:14px;font-size:10px;color:var(--grigio-chiaro);text-align:center;letter-spacing:.5px;"></div>
   </div>
 </div>
 
@@ -2165,7 +2168,7 @@ function renderUtenti(pb){
       <td><span class="bg ${u.attivo?'bg-on':'bg-off'}">${u.attivo?'● Attivo':'○ Inattivo'}</span></td>
       <td><div class="tda">
         <button class="btn bs bsm" data-ue="${u.id}">✏</button>
-        ${u.id!==S.user?.id?`<button class="btn bd bsm" data-ud="${u.id}">🗑</button>`:''}
+        ${u.id!==S.user?.id?`<button class="btn bd bsm" data-ud="${u.id}" title="Rimuove il profilo (non cancella l'account)">🗑</button>`:''}
       </div></td>
     </tr>`).join('')}
     </tbody></table>`}
@@ -2174,21 +2177,37 @@ function renderUtenti(pb){
   pb.querySelectorAll('[data-ue]').forEach(b=>b.addEventListener('click',()=>openUtenteModal(S.profili.find(x=>x.id===b.dataset.ue))));
   pb.querySelectorAll('[data-ud]').forEach(b=>b.addEventListener('click',()=>{
     const u=S.profili.find(x=>x.id===b.dataset.ud);
-    openConf(`Eliminare l'utente "${u?.nome} ${u?.cognome}"?`,async()=>{
-      await db('DELETE',T('profili'),{flt:`id=eq.${b.dataset.ud}`});
-      S.profili=S.profili.filter(x=>x.id!==b.dataset.ud); renderPage(); toast('Utente eliminato');
+    openConf(`Rimuovere il profilo di "${u?.nome} ${u?.cognome}" da Gestione Sedi?\n\nL'account di accesso rimane attivo sugli altri tool.`,async()=>{
+      const res=await fetch(`${CFG.FN}/sedi-manage-user`,{method:'POST',
+        headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
+        body:JSON.stringify({action:'delete_profile',user_id:b.dataset.ud})});
+      const data=await res.json();
+      if(!data.ok) throw new Error(data.error||'Errore');
+      S.profili=S.profili.filter(x=>x.id!==b.dataset.ud); renderPage(); toast('Profilo rimosso');
     });
   }));
 }
 
 function openUtenteModal(u){
+  const isNew=!u;
   const body=`
     <div class="fr">
       <div class="fg"><div class="fl">Nome *</div><input class="fi" id="un" value="${esc(u?.nome||'')}"/></div>
       <div class="fg"><div class="fl">Cognome *</div><input class="fi" id="ucg" value="${esc(u?.cognome||'')}"/></div>
     </div>
-    <div class="fg"><div class="fl">Email *</div><input class="fi" id="ue" type="email" value="${esc(u?.email||'')}"/></div>
-    ${!u?`<div class="fg"><div class="fl">Password *</div><input class="fi" id="upw" type="password" placeholder="Minimo 6 caratteri"/></div>`:''}
+    <div class="fg"><div class="fl">Email *</div>
+      <div style="display:flex;gap:8px;align-items:flex-end">
+        <input class="fi" id="ue" type="email" value="${esc(u?.email||'')}" style="flex:1" ${u?'':'placeholder="nome@medicalgroup.it"'}/>
+        ${isNew?`<button class="btn bs bsm" id="u-check-email" style="white-space:nowrap">Verifica</button>`:''}
+      </div>
+      <div id="u-email-info" style="font-size:11px;margin-top:5px;display:none"></div>
+    </div>
+    <div id="u-pwd-wrap" style="${isNew?'':'display:none'}">
+      <div class="fg"><div class="fl">Password *</div>
+        <input class="fi" id="upw" type="password" placeholder="Minimo 6 caratteri"/>
+        <div style="font-size:11px;color:var(--g500);margin-top:4px" id="u-pwd-hint">Se l'utente esiste già in un altro tool, la password non serve.</div>
+      </div>
+    </div>
     <div class="fg"><div class="fl">Ruolo</div>
       <select class="fse" id="ur">
         <option value="utente"${u?.ruolo==='utente'?' selected':''}>Utente (solo lettura)</option>
@@ -2198,7 +2217,12 @@ function openUtenteModal(u){
     <div class="fg"><label class="tw">
       <div class="tg"><input type="checkbox" id="ua" ${u?.attivo!==false?'checked':''}><span class="tsl"></span></div>
       <span class="fl" style="margin:0">Utente attivo</span>
-    </label></div>`;
+    </label></div>
+    ${u?`<div class="fg" id="u-newpwd-wrap">
+      <div class="fl">Nuova password <span style="font-weight:400;font-size:11px;color:var(--g500)">(lascia vuoto per non modificare)</span></div>
+      <input class="fi" id="upw" type="password" placeholder="Minimo 6 caratteri"/>
+    </div>`:''}`;
+
   openM(u?'✏ Modifica utente':'+ Nuovo utente',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
@@ -2207,26 +2231,72 @@ function openUtenteModal(u){
       if(!nome||!cog||!email){toast('Compila tutti i campi obbligatori','err');return;}
       try{
         if(u){
-          await db('PATCH',T('profili'),{flt:`id=eq.${u.id}`,body:{nome,cognome:cog,email,ruolo,attivo}});
+          // UPDATE
+          const pwd=$('upw')?.value||'';
+          const payload={action:'update',user_id:u.id,nome,cognome:cog,email,ruolo,attivo};
+          if(pwd){
+            if(pwd.length<6){toast('Password minimo 6 caratteri','err');return;}
+            payload.password=pwd;
+          }
+          const res=await fetch(`${CFG.FN}/sedi-manage-user`,{method:'POST',
+            headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
+            body:JSON.stringify(payload)});
+          const data=await res.json();
+          if(!data.ok) throw new Error(data.error||'Errore aggiornamento');
           S.profili=S.profili.map(x=>x.id===u.id?{...x,nome,cognome:cog,email,ruolo,attivo}:x);
         }else{
-          // creazione utente via Edge Function (come negli altri tool)
+          // CREATE
           const pwd=$('upw')?.value||'';
-          if(pwd.length<6){toast('Password minimo 6 caratteri','err');return;}
-          const res=await fetch(`${CFG.FN}/sedi-create-user`,{
-            method:'POST',
+          const emailInfo=$('u-email-info');
+          const alreadyExists=emailInfo?.dataset.exists==='true';
+          if(!alreadyExists&&pwd.length<6){toast('Password minimo 6 caratteri','err');return;}
+          const payload={action:'create',email,nome,cognome:cog,ruolo};
+          if(!alreadyExists) payload.password=pwd;
+          const res=await fetch(`${CFG.FN}/sedi-manage-user`,{method:'POST',
             headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
-            body:JSON.stringify({email,password:pwd,nome,cognome:cog,ruolo}),
-          });
+            body:JSON.stringify(payload)});
           const data=await res.json();
-          if(!data.ok) throw new Error(data.error||'Errore creazione utente');
+          if(!data.ok) throw new Error(data.error||'Errore creazione');
           S.profili.push({id:data.user_id,nome,cognome:cog,email,ruolo,attivo:true});
-          logAct('utente_create',`Nuovo utente: ${nome} ${cog}`);
+          logAct('utente_create',`Nuovo utente: ${nome} ${cog}${data.auth_created?'':' (account esistente collegato)'}`);
         }
         closeM();renderPage();toast(u?'Utente aggiornato':'Utente aggiunto ✅');
       }catch(e){toast(e.message,'err');}
     }},
   ]);
+
+  // Logica "Verifica email" per i nuovi utenti
+  if(isNew){
+    const checkBtn=$('u-check-email');
+    const pwdWrap=$('u-pwd-wrap');
+    const emailInfo=$('u-email-info');
+    if(checkBtn){
+      checkBtn.addEventListener('click',async()=>{
+        const email=$('ue').value.trim();
+        if(!email){toast('Inserisci un\'email','warn');return;}
+        checkBtn.textContent='…'; checkBtn.disabled=true;
+        try{
+          const res=await fetch(`${CFG.FN}/sedi-manage-user`,{method:'POST',
+            headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
+            body:JSON.stringify({action:'check_email',email})});
+          const data=await res.json();
+          if(!data.ok) throw new Error(data.error);
+          emailInfo.dataset.exists=data.exists?'true':'false';
+          if(data.exists){
+            emailInfo.style.cssText='display:block;color:#1a7a40;font-weight:600;font-size:12px;margin-top:5px';
+            emailInfo.textContent='✓ Utente già registrato — verrà collegato al profilo esistente (password non richiesta)';
+            pwdWrap.style.display='none';
+            $('upw').value='';
+          }else{
+            emailInfo.style.cssText='display:block;color:var(--g500);font-size:12px;margin-top:5px';
+            emailInfo.textContent='Nuovo utente — verrà creato un account con la password indicata';
+            pwdWrap.style.display='';
+          }
+        }catch(e){toast('Errore verifica email: '+e.message,'err');}
+        checkBtn.textContent='Verifica'; checkBtn.disabled=false;
+      });
+    }
+  }
 }
 
 /* ══════════════════════════════════════════
@@ -2307,7 +2377,8 @@ document.addEventListener('keydown',e=>{if(e.key==='Escape')closeM();});
 async function doLogin(){
   const email=$('lem').value.trim(),pwd=$('lpw').value;
   const btn=$('lbtn'),err=$('lerr');
-  err.classList.add('hid');
+  err.style.display='none';
+  if(!email||!pwd){err.textContent='Inserisci email e password.';err.style.display='block';return;}
   btn.innerHTML='<span class="spn"></span> Accesso…'; btn.disabled=true;
   try{
     const auth=await supaLogin(email,pwd);
@@ -2321,7 +2392,7 @@ async function doLogin(){
     logAct('login','Accesso effettuato');
     toast(`Benvenuto, ${S.user.nome}! ✅`);
   }catch(e){
-    err.innerHTML=`⚠ ${esc(e.message)}`; err.classList.remove('hid');
+    err.textContent=e.message; err.style.display='block';
     btn.innerHTML='Accedi'; btn.disabled=false;
   }
 }
