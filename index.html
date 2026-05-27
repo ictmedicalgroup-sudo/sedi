@@ -2156,23 +2156,26 @@ async function checkEmailLive(inputEl,infoEl,pwdWrap,fnName){
   const email=inputEl.value.trim();
   infoEl.style.display='none'; infoEl.dataset.exists='';
   if(!email||!email.includes('@')) return;
+  // indicatore di caricamento
+  infoEl.style.cssText='display:block;margin-top:6px;padding:6px 12px;font-size:12px;color:var(--g500)';
+  infoEl.textContent='Verifica in corso\u2026';
   try{
     const res=await fetch(`${CFG.FN}/${fnName}`,{method:'POST',
       headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
       body:JSON.stringify({action:'check_email',email})});
     const data=await res.json();
-    if(!data.ok) return;
+    if(!data.ok){ infoEl.style.display='none'; return; }
     infoEl.dataset.exists=data.exists?'true':'false';
     if(data.exists){
-      infoEl.style.cssText='display:block;margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#EEF5E3;border:1px solid var(--blue-light);font-size:12px;color:#2e6e1a;font-weight:600';
+      infoEl.style.cssText='display:block;margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#EEF5E3;border:1px solid #9DBF60;font-size:12px;color:#2e6e1a;font-weight:600';
       infoEl.textContent='\u2713 Utente gi\u00e0 presente \u2014 la password rimane la stessa impostata per gli altri tool';
-      if(pwdWrap) pwdWrap.style.display='none';
+      if(pwdWrap){ pwdWrap.style.display='none'; const p=pwdWrap.querySelector('input[type=password]'); if(p) p.value=''; }
     }else{
       infoEl.style.cssText='display:block;margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:var(--g50);border:1px solid var(--g200);font-size:12px;color:var(--g500)';
       infoEl.textContent='Nuovo utente \u2014 inserisci una password per creare l\'account';
       if(pwdWrap) pwdWrap.style.display='';
     }
-  }catch(e){}
+  }catch(e){ infoEl.style.display='none'; }
 }
 const PWD_WARN_HTML='<div style="margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#FEF0E3;border:1px solid #f5c28a;font-size:12px;color:#7a3800;font-weight:600">\u26a0 Attenzione: questa password sar\u00e0 valida per tutti i tool che usano lo stesso account.</div>';
 function renderUtentiTable(list,pb){
