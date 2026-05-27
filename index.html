@@ -2154,20 +2154,24 @@ function openCampoModal(campo,subcatId){
 /* ── Check email live + avviso password cross-tool ── */
 async function checkEmailLive(inputEl,infoEl,pwdWrap,fnName){
   const email=inputEl.value.trim();
-  infoEl.style.display='none'; infoEl.dataset.exists='';
-  if(!email||!email.includes('@')) return;
-  // indicatore di caricamento
-  infoEl.style.cssText='display:block;margin-top:6px;padding:6px 12px;font-size:12px;color:var(--g500)';
+  if(infoEl){infoEl.style.display='none'; infoEl.dataset.exists='';}
+  if(!email||!email.includes('@')||!email.includes('.')) return;
+  if(!infoEl) return;
+  infoEl.style.cssText='display:block;margin-top:6px;padding:6px 10px;border-radius:var(--rsm);background:var(--g50);border:1px solid var(--g200);font-size:12px;color:var(--g500)';
   infoEl.textContent='Verifica in corso\u2026';
   try{
     const res=await fetch(`${CFG.FN}/${fnName}`,{method:'POST',
       headers:{'Authorization':`Bearer ${S.token}`,'Content-Type':'application/json'},
       body:JSON.stringify({action:'check_email',email})});
     const data=await res.json();
-    if(!data.ok){ infoEl.style.display='none'; return; }
+    if(!data.ok){
+      infoEl.style.cssText='display:block;margin-top:6px;padding:6px 10px;border-radius:var(--rsm);background:var(--red-light);border:1px solid var(--red);font-size:12px;color:var(--red)';
+      infoEl.textContent='Errore verifica: '+(data.error||'risposta non valida');
+      return;
+    }
     infoEl.dataset.exists=data.exists?'true':'false';
     if(data.exists){
-      infoEl.style.cssText='display:block;margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#EEF5E3;border:1px solid #9DBF60;font-size:12px;color:#2e6e1a;font-weight:600';
+      infoEl.style.cssText='display:block;margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#EEF5E3;border:1px solid var(--verde);font-size:12px;color:#2e6e1a;font-weight:600';
       infoEl.textContent='\u2713 Utente gi\u00e0 presente \u2014 la password rimane la stessa impostata per gli altri tool';
       const wrap=pwdWrap||document.getElementById('um-pwd-wrap');
       if(wrap){ wrap.style.display='none'; const p=wrap.querySelector('input[type=password]'); if(p){p.value='';p.disabled=true;} }
@@ -2177,7 +2181,10 @@ async function checkEmailLive(inputEl,infoEl,pwdWrap,fnName){
       const wrap=pwdWrap||document.getElementById('um-pwd-wrap');
       if(wrap){ wrap.style.display=''; const p=wrap.querySelector('input[type=password]'); if(p) p.disabled=false; }
     }
-  }catch(e){ infoEl.style.display='none'; }
+  }catch(e){
+    infoEl.style.cssText='display:block;margin-top:6px;padding:6px 10px;border-radius:var(--rsm);background:var(--red-light);border:1px solid var(--red);font-size:12px;color:var(--red)';
+    infoEl.textContent='Errore di rete: '+e.message;
+  }
 }
 const PWD_WARN_HTML='<div style="margin-top:6px;padding:8px 12px;border-radius:var(--rsm);background:#FEF0E3;border:1px solid #f5c28a;font-size:12px;color:#7a3800;font-weight:600">\u26a0 Attenzione: questa password sar\u00e0 valida per tutti i tool che usano lo stesso account.</div>';
 function renderUtentiTable(list,pb){
@@ -2296,7 +2303,16 @@ function openUtenteModal(u){
     const emailEl=document.getElementById('um-email');
     const infoEl=document.getElementById('um-email-info');
     const pwdWrap=document.getElementById('um-pwd-wrap');
-    emailEl.addEventListener('blur',()=>checkEmailLive(emailEl,infoEl,pwdWrap,'sedi-manage-user'));
+    let debTimer=null;
+    const doCheck=()=>checkEmailLive(emailEl,infoEl,pwdWrap,'sedi-manage-user');
+    emailEl.addEventListener('blur', doCheck);
+    emailEl.addEventListener('input',()=>{
+      clearTimeout(debTimer);
+      if(infoEl){infoEl.style.display='none'; infoEl.dataset.exists='';}
+      if(emailEl.value.includes('@')&&emailEl.value.includes('.')){
+        debTimer=setTimeout(doCheck, 600);
+      }
+    });
   }
   if(!isNew){
     const pwdEl=document.getElementById('um-newpwd');
