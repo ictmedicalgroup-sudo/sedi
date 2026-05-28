@@ -280,7 +280,7 @@ const T = n => `sedi_${n}`;
    STATO
 ══════════════════════════════════════════ */
 const S = {
-  user: null, token: null,
+  user: null, token: null, refreshToken: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
   page: 'griglia',
@@ -371,7 +371,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 /* ══════════════════════════════════════════
    SUPABASE REST
 ══════════════════════════════════════════ */
-async function db(method,table,opts={}){
+async function db(method,table,opts={},_retry=false){
   const {flt='',body=null,sel='*',ord='',lim=''}=opts;
   let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
   if(flt) url+=`&${flt}`;
@@ -380,6 +380,15 @@ async function db(method,table,opts={}){
   const headers={'apikey':CFG.KEY,'Authorization':`Bearer ${S.token||CFG.KEY}`,'Content-Type':'application/json',
     'Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''};
   const res=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined});
+  if(res.status===401&&!_retry&&S.refreshToken){
+    try{
+      await supaRefreshToken();
+      return db(method,table,opts,true);
+    }catch(e){
+      // refresh fallito → logout forzato
+      doLogout(); throw new Error('Sessione scaduta, effettua nuovamente il login');
+    }
+  }
   if(!res.ok){const e=await res.text();throw new Error(`${method} ${table}: ${e}`);}
   return method==='DELETE'?null:res.json();
 }
@@ -389,6 +398,16 @@ async function supaLogin(email,password){
   const data=await res.json();
   if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
   return data;
+}
+async function supaRefreshToken(){
+  if(!S.refreshToken) throw new Error('Nessun refresh token disponibile');
+  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
+    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:S.refreshToken})});
+  const data=await res.json();
+  if(!res.ok) throw new Error('Sessione scaduta, effettua nuovamente il login');
+  S.token=data.access_token;
+  S.refreshToken=data.refresh_token;
 }
 async function supaLogout(){
   try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
@@ -2405,6 +2424,7 @@ async function doLogin(){
   try{
     const auth=await supaLogin(email,pwd);
     S.token=auth.access_token;
+    S.refreshToken=auth.refresh_token;
     const [profilo]=await db('GET',T('profili'),{flt:`id=eq.${auth.user.id}`});
     if(!profilo) throw new Error('Profilo non trovato. Contatta l\'amministratore.');
     if(profilo.attivo===false) throw new Error('Utente disabilitato. Contatta l\'amministratore.');
@@ -2421,7 +2441,7 @@ async function doLogin(){
 }
 async function doLogout(){
   await supaLogout();
-  S.user=null;S.token=null;
+  S.user=null;S.token=null;S.refreshToken=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
 }
 $('lbtn').addEventListener('click',doLogin);
