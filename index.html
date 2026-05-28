@@ -1098,11 +1098,11 @@ function renderAsset(pb){
       <input class="fi-sm" id="af-search" placeholder="🔍 Cerca asset..." value="${esc(f.search)}" style="width:200px"/>
       <select class="fi-sm" id="af-cat">
         <option value="">Tutte le categorie</option>
-        ${S.assetCat.map(c=>`<option value="${c.id}"${f.catId===c.id?' selected':''}>${esc(c.icona||'')} ${esc(c.nome)}</option>`).join('')}
+        ${[...S.assetCat].sort((a,b)=>a.nome.localeCompare(b.nome)).map(cat=>`<option value="${cat.id}"${f.catId===cat.id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
       </select>
-      <select class="fi-sm" id="af-sub">
-        <option value="">Tutte le sottocategorie</option>
-        ${S.assetSubcat.filter(sc=>!f.catId||sc.categoria_id===f.catId).map(sc=>`<option value="${sc.id}"${f.subcatId===sc.id?' selected':''}>${esc(sc.nome)}</option>`).join('')}
+      <select class="fi-sm" id="af-sub" ${!f.catId?'disabled':''}>
+        <option value="">${f.catId?'Tutte le sottocategorie':'— Seleziona prima categoria —'}</option>
+        ${f.catId?[...S.assetSubcat.filter(sc=>sc.categoria_id===f.catId)].sort((a,b)=>a.nome.localeCompare(b.nome)).map(sc=>`<option value="${sc.id}"${f.subcatId===sc.id?' selected':''}>${esc(sc.nome)}</option>`).join(''):''}
       </select>
       <select class="fi-sm" id="af-sede">
         <option value="">Tutte le sedi</option>
@@ -1117,7 +1117,20 @@ function renderAsset(pb){
   </div>`;
 
   $('af-search').addEventListener('input',e=>{f.search=e.target.value;renderAssetTable();});
-  $('af-cat').addEventListener('change',e=>{f.catId=e.target.value;f.subcatId='';renderPage();});
+  $('af-cat').addEventListener('change',e=>{
+    f.catId=e.target.value; f.subcatId='';
+    // aggiorna select sottocategorie senza full re-render
+    const sub=$('af-sub');
+    if(sub){
+      if(!f.catId){ sub.innerHTML='<option value="">— Seleziona prima categoria —</option>'; sub.disabled=true; }
+      else {
+        const opts=[...S.assetSubcat.filter(sc=>sc.categoria_id===f.catId)].sort((a,b)=>a.nome.localeCompare(b.nome));
+        sub.innerHTML='<option value="">Tutte le sottocategorie</option>'+opts.map(sc=>`<option value="${sc.id}">${esc(sc.nome)}</option>`).join('');
+        sub.disabled=false;
+      }
+    }
+    renderAssetTable();
+  });
   $('af-sub').addEventListener('change',e=>{f.subcatId=e.target.value;renderPage();});
   $('af-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderAssetTable();});
   $('a-add').addEventListener('click',()=>openAssetModal(null));
@@ -1263,7 +1276,10 @@ async function openUbicazioniModal(assetId){
       </div>`).join('');
     $('ub-list').querySelectorAll('[data-ubdel]').forEach(b=>b.addEventListener('click',async()=>{
       await db('DELETE',T('asset_sedi'),{flt:`id=eq.${b.dataset.ubdel}`});
-      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); S._assetDirty=true; render();
+      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); S._assetDirty=true;
+      const freshSedi2=await db('GET',T('asset_sedi'),{})||[];
+      S.assetSedi=freshSedi2;
+      render(); renderAssetTable();
     }));
   };
   openM(`📍 Ubicazioni — ${a?.nome}`,`
@@ -1288,7 +1304,11 @@ async function openUbicazioniModal(assetId){
     if(!sid||!da){toast('Sede e data inizio obbligatorie','err');return;}
     const sala=$('ub-sala')?.value.trim();
     const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,sala:sala||null,note:note||null}});
-    locs.unshift(nl); S._assetDirty=true; render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
+    locs.unshift(nl); S._assetDirty=true;
+    // ricarica assetSedi freschi dal db
+    const freshSedi=await db('GET',T('asset_sedi'),{})||[];
+    S.assetSedi=freshSedi;
+    render(); renderAssetTable(); $('ub-da').value='';$('ub-a').value='';$('ub-sala').value='';$('ub-note').value='';
     toast('Ubicazione aggiunta ✅');
   });
 }
@@ -1639,12 +1659,13 @@ function renderVerifiche(pb){
 }
 
 function openVerificaModal(v){
+  const assetSelezionato=v?S.asset.find(a=>a.id===v.asset_id):null;
   const body=`
     <div class="fg"><div class="fl">Asset *</div>
-      <select class="fse" id="vm-asset">
-        <option value="">— Seleziona asset —</option>
-        ${S.asset.map(a=>`<option value="${a.id}"${v?.asset_id===a.id?' selected':''}>${esc(a.codice?a.codice+' — ':'')}${esc(a.nome)}</option>`).join('')}
-      </select></div>
+      <input class="fi" id="vm-asset-search" placeholder="🔍 Cerca per nome o codice..." value="${esc(assetSelezionato?(assetSelezionato.codice?assetSelezionato.codice+' — ':'')+assetSelezionato.nome:'')}"/>
+      <input type="hidden" id="vm-asset" value="${v?.asset_id||''}"/>
+      <div id="vm-asset-results" style="border:1px solid var(--g200);border-radius:var(--rsm);max-height:160px;overflow-y:auto;display:none;background:#fff;box-shadow:var(--sh-sm);margin-top:2px"></div>
+    </div>
     <div class="fr">
       <div class="fg"><div class="fl">Ultima verifica</div><input class="fi" id="vm-data" type="date" value="${v?.ultima_verifica||''}"/></div>
       <div class="fg"><div class="fl">Periodicità</div>
@@ -1678,6 +1699,31 @@ function openVerificaModal(v){
       }catch(e){toast(e.message,'err');}
     }},
   ]);
+  // Inizializza ricerca asset
+  setTimeout(()=>{
+    const inp=$('vm-asset-search'),hid=$('vm-asset'),res=$('vm-asset-results');
+    if(!inp) return;
+    inp.addEventListener('input',()=>{
+      const q=inp.value.toLowerCase().trim();
+      if(!q){res.style.display='none';hid.value='';return;}
+      const matches=S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''}`.toLowerCase().includes(q)).slice(0,10);
+      if(!matches.length){res.style.display='none';return;}
+      res.innerHTML=matches.map(a=>`<div data-aid="${a.id}" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)"
+        onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
+        ${a.codice?`<span style="font-family:monospace;font-size:11px;color:var(--g500)">${esc(a.codice)}</span> — `:''}
+        <strong>${esc(a.nome)}</strong>${a.marca?` <span style="color:var(--g500)">${esc(a.marca)}</span>`:''}
+      </div>`).join('');
+      res.style.display='block';
+      res.querySelectorAll('[data-aid]').forEach(el=>el.addEventListener('click',()=>{
+        const a=S.asset.find(x=>x.id===el.dataset.aid);
+        hid.value=a.id;
+        inp.value=(a.codice?a.codice+' — ':'')+a.nome;
+        res.style.display='none';
+      }));
+    });
+    inp.addEventListener('blur',()=>setTimeout(()=>{res.style.display='none';},200));
+    inp.addEventListener('focus',()=>{ if(inp.value) inp.dispatchEvent(new Event('input')); });
+  },50);
 }
 
 /* ══════════════════════════════════════════
