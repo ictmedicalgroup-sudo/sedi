@@ -2257,12 +2257,19 @@ function openSedeModal(sede){
 ══════════════════════════════════════════ */
 function renderAree(pb){
   pb.innerHTML=`<div class="fian"><div class="card">
-    <div class="ch"><span class="ct">🌍 Aree geografiche (${S.aree.length})</span><button class="btn bpg bsm" id="ar-add">+ Area</button></div>
+    <div class="ch">
+      <span class="ct">🌍 Aree geografiche (${S.aree.length})</span>
+      <div style="display:flex;align-items:center;gap:10px">
+        <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
+        <button class="btn bpg bsm" id="ar-add">+ Area</button>
+      </div>
+    </div>
     ${!S.aree.length?`<div class="emp"><div class="emi">🌍</div><div class="emt">Nessuna area</div></div>`:
-    `<table class="dt"><thead><tr><th>Nome</th><th>Ordine</th><th>Sedi</th><th>Azioni</th></tr></thead><tbody>
-    ${[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0)).map(a=>`<tr>
+    `<table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Sedi</th><th>Azioni</th></tr></thead>
+    <tbody id="aree-sortable">
+    ${[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0)).map(a=>`<tr data-arid="${a.id}" style="cursor:grab">
+      <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
       <td class="tn">${esc(a.nome)}</td>
-      <td style="color:var(--g500);font-size:12px">${a.ordine||0}</td>
       <td><span class="bg bg-usr">${S.sedi.filter(s=>s.area_id===a.id).length} sedi</span></td>
       <td><div class="tda">
         <button class="btn bs bsm" data-ae="${a.id}">✏</button>
@@ -2271,6 +2278,7 @@ function renderAree(pb){
     </tr>`).join('')}
     </tbody></table>`}
   </div></div>`;
+
   $('ar-add').addEventListener('click',()=>openAreaModal(null));
   pb.querySelectorAll('[data-ae]').forEach(b=>b.addEventListener('click',()=>openAreaModal(S.aree.find(x=>x.id===b.dataset.ae))));
   pb.querySelectorAll('[data-ad]').forEach(b=>b.addEventListener('click',()=>{
@@ -2281,6 +2289,35 @@ function renderAree(pb){
       S.aree=S.aree.filter(x=>x.id!==b.dataset.ad); renderPage(); toast('Area eliminata');
     });
   }));
+
+  // Drag & drop
+  const tbody=document.getElementById('aree-sortable'); if(!tbody) return;
+  let dragging=null;
+  tbody.querySelectorAll('tr[data-arid]').forEach(row=>{
+    row.setAttribute('draggable','true');
+    row.addEventListener('dragstart',e=>{dragging=row;row.style.opacity='.4';e.dataTransfer.effectAllowed='move';});
+    row.addEventListener('dragend',()=>{
+      dragging.style.opacity='1'; dragging=null;
+      saveAreaOrder(tbody);
+    });
+    row.addEventListener('dragover',e=>{
+      e.preventDefault();
+      if(!dragging||dragging===row) return;
+      const rect=row.getBoundingClientRect();
+      if(e.clientY<rect.top+rect.height/2) tbody.insertBefore(dragging,row);
+      else tbody.insertBefore(dragging,row.nextSibling);
+    });
+  });
+}
+
+async function saveAreaOrder(tbody){
+  const rows=[...tbody.querySelectorAll('tr[data-arid]')];
+  for(let i=0;i<rows.length;i++){
+    const aid=rows[i].dataset.arid;
+    await db('PATCH',T('aree'),{flt:`id=eq.${aid}`,body:{ordine:i}});
+    const a=S.aree.find(x=>x.id===aid); if(a) a.ordine=i;
+  }
+  toast('Ordine aree salvato ✅');
 }
 
 function renderAssetCategorie(pb){
