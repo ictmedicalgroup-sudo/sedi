@@ -1962,7 +1962,7 @@ function buildAssetStrutturaHTML(){
         </div>
       </div>
       <div class="str-cat-body">
-        ${S.assetSubcat.filter(sc=>sc.categoria_id===cat.id).map(sc=>`
+        ${[...S.assetSubcat.filter(sc=>sc.categoria_id===cat.id)].sort((a,b)=>a.nome.localeCompare(b.nome)).map(sc=>`
           <div class="str-subcat">
             <div class="str-subcat-hdr">
               <span style="font-weight:600;color:var(--g700)">${esc(sc.nome)}</span>
