@@ -294,17 +294,18 @@ const S = {
    NAV
 ══════════════════════════════════════════ */
 const NAV_MAIN = [
-  {id:'asset',     l:'Asset',         ic:'🔧', r:['admin','utente','asset']},
-  {id:'costi_ric', l:'Costi',         ic:'💰', r:['admin','utente','asset']},
-  {id:'fornitori', l:'Fornitori',     ic:'🤝', r:['admin','asset']},
-  {id:'griglia',   l:'Informazioni',  ic:'📊', r:['admin','utente']},
-  {id:'mappa',     l:'Mappa',         ic:'🗺', r:['admin','utente']},
+  {id:'asset',     l:'Asset',         ic:'', r:['admin','utente','asset']},
+  {id:'costi_ric', l:'Costi',         ic:'', r:['admin','utente','asset']},
+  {id:'fornitori', l:'Fornitori',     ic:'', r:['admin','asset']},
+  {id:'griglia',   l:'Informazioni',  ic:'', r:['admin','utente']},
+  {id:'mappa',     l:'Mappa',         ic:'', r:['admin','utente']},
 ];
 const NAV_ADMIN = [
   {id:'sedi',      l:'Sedi',          ic:'📍'},
   {id:'ragioni',   l:'Ragioni sociali',ic:'🏛'},
   {id:'aree',      l:'Aree geografiche',ic:'🌍'},
   {id:'struttura', l:'Struttura',     ic:'🗂'},
+  {id:'asset_cat', l:'Asset: categorie',ic:'🔧'},
   {id:'utenti',    l:'Utenti',        ic:'👥'},
   {id:'log',       l:'Log',           ic:'📋'},
 ];
@@ -494,8 +495,9 @@ function renderPage(){
   else if(S.page==='sedi')      renderSediPage(pb);
   else if(S.page==='ragioni')   renderRagioni(pb);
   else if(S.page==='fornitori') renderFornitori(pb);
-  else if(S.page==='aree')      renderAree(pb);
   else if(S.page==='struttura') renderStruttura(pb);
+  else if(S.page==='asset_cat') renderAssetCategorie(pb);
+  else if(S.page==='aree')      renderAree(pb);
   else if(S.page==='utenti')    renderUtenti(pb);
   else if(S.page==='log')       renderLog(pb);
 }
@@ -1100,14 +1102,7 @@ function renderAsset(pb){
       </select>
       <select class="fi-sm" id="af-sede">
         <option value="">Tutte le sedi</option>
-        ${(()=>{
-          const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
-          const perArea={};
-          sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
-          return areeOrd.filter(a=>perArea[a.id]).map(a=>
-            `<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`
-          ).join('')+(perArea['__']?`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`:'');
-        })()}
+        ${sediOrdinate().map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}
       </select>
       <button class="btn bpg bsm" id="a-add">+ Nuovo asset</button>
     </div>
@@ -1793,12 +1788,11 @@ function renderSediPage(pb){
         <span style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px">📍 ${esc(area)}</span>
         <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
       </div>
-      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Ragione sociale</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody class="sortable-area" data-area="${esc(area)}">
         ${sediArea.map(s=>`<tr data-id="${s.id}" style="cursor:grab">
           <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
           <td><div class="tn">${esc(s.nome)}</div></td>
-          <td><span style="font-size:12px;color:var(--g500)">${esc(S.ragioni.find(r=>r.id===s.ragione_sociale_id)?.nome||'—')}</span></td>
           <td>${esc(s.indirizzo||'—')}</td>
           <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
           <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
@@ -1947,21 +1941,22 @@ function renderAree(pb){
   }));
 }
 
-function renderStruttura(pb){
-  pb.innerHTML=`<div class="fian">
-    <div class="card" style="margin-bottom:20px">
-      <div class="ch"><span class="ct">🗂 Struttura informazioni</span><button class="btn bpg bsm" id="cat-add">+ Categoria</button></div>
-      <div class="cb" id="str-body">${buildStrutturaHTML()}</div>
-    </div>
-    <div class="card">
-      <div class="ch"><span class="ct">🔧 Categorie asset</span><button class="btn bpg bsm" id="acat-add">+ Categoria asset</button></div>
-      <div class="cb" id="acat-body">${buildAssetStrutturaHTML()}</div>
-    </div>
-  </div>`;
-  $('cat-add').addEventListener('click',()=>openCatModal(null));
+function renderAssetCategorie(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch"><span class="ct">🔧 Categorie asset</span><button class="btn bpg bsm" id="acat-add">+ Categoria asset</button></div>
+    <div class="cb" id="acat-body">${buildAssetStrutturaHTML()}</div>
+  </div></div>`;
   $('acat-add').addEventListener('click',()=>openAssetCatModal(null));
-  bindStrutturaEvents(pb);
   bindAssetStrutturaEvents();
+}
+
+function renderStruttura(pb){
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch"><span class="ct">🗂 Struttura informazioni</span><button class="btn bpg bsm" id="cat-add">+ Categoria</button></div>
+    <div class="cb" id="str-body">${buildStrutturaHTML()}</div>
+  </div></div>`;
+  $('cat-add').addEventListener('click',()=>openCatModal(null));
+  bindStrutturaEvents(pb);
 }
 
 function buildStrutturaHTML(){
@@ -2135,18 +2130,11 @@ function openCatModal(cat){
 function openSubcatModal(sc,catId){
   const cid=catId||(sc?.categoria_id);
   openM(sc?'✏ Modifica sottocategoria':'+ Nuova sottocategoria',`
-    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="sc-nome" value="${esc(sc?.nome||'')}"/></div>
-    ${sc?`<div class="fg"><div class="fl">Categoria</div>
-      <select class="fse" id="sc-cat">
-        ${S.categorie.map(cat=>`<option value="${cat.id}"${cat.id===sc.categoria_id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
-      </select></div>`:''}`,
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="sc-nome" value="${esc(sc?.nome||'')}"/></div>`,
   [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
     const nome=$('sc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
-    const newCatId=sc?($('sc-cat')?.value||sc.categoria_id):cid;
-    if(sc){
-      await db('PATCH',T('sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome,categoria_id:newCatId}});
-      S.sottocategorie=S.sottocategorie.map(x=>x.id===sc.id?{...x,nome,categoria_id:newCatId}:x);
-    }else{const[ns]=await db('POST',T('sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.sottocategorie.filter(x=>x.categoria_id===cid).length}});S.sottocategorie.push(ns);}
+    if(sc){await db('PATCH',T('sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome}});S.sottocategorie=S.sottocategorie.map(x=>x.id===sc.id?{...x,nome}:x);}
+    else{const[ns]=await db('POST',T('sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.sottocategorie.filter(x=>x.categoria_id===cid).length}});S.sottocategorie.push(ns);}
     closeM();refreshStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
   }}]);
 }
