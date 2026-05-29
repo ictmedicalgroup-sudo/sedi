@@ -1793,11 +1793,12 @@ function renderSediPage(pb){
         <span style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px">📍 ${esc(area)}</span>
         <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
       </div>
-      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Ragione sociale</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody class="sortable-area" data-area="${esc(area)}">
         ${sediArea.map(s=>`<tr data-id="${s.id}" style="cursor:grab">
           <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
           <td><div class="tn">${esc(s.nome)}</div></td>
+          <td><span style="font-size:12px;color:var(--g500)">${esc(S.ragioni.find(r=>r.id===s.ragione_sociale_id)?.nome||'—')}</span></td>
           <td>${esc(s.indirizzo||'—')}</td>
           <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
           <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
