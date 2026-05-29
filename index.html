@@ -1640,8 +1640,9 @@ function alertSectionHTML(tipo, refId){
         <div class="tg"><input type="checkbox" id="al-attivo" ${cfg?.attivo!==false?'checked':''}><span class="tsl"></span></div>
         <span class="fl" style="margin:0">Alert attivo</span>
       </label>
-      ${cfg?`<button class="btn bs bsm" id="al-test" type="button">🧪 TEST</button>`:''}
+      <button class="btn bs bsm" id="al-test" type="button" ${cfg?'':'title="Salva prima per abilitare il test"'} style="${cfg?'':'opacity:.45;cursor:not-allowed'}" ${cfg?'':'disabled'}>🧪 TEST</button>
     </div>
+    ${!cfg?`<div style="font-size:11px;color:var(--g500);margin-top:4px">💡 Salva per attivare il pulsante TEST</div>`:''}
     <div id="al-test-result" style="font-size:12px;margin-top:6px"></div>
   </div>`;
 }
@@ -1787,8 +1788,9 @@ function openVerificaModal(v){
     });
     inp.addEventListener('blur',()=>setTimeout(()=>{res.style.display='none';},200));
     inp.addEventListener('focus',()=>{ if(inp.value) inp.dispatchEvent(new Event('input')); });
-    // TEST button
-    if(v) $('al-test')?.addEventListener('click',()=>sendTestAlert('verifica',v.id));
+    // TEST button (solo se esiste già una config)
+    const testBtn=$('al-test');
+    if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('verifica',v.id));
   },50);
 }
 
@@ -1872,7 +1874,10 @@ function openConvenzioneModal(con){
     }},
   ]);
   // TEST button
-  if(con) setTimeout(()=>$('al-test')?.addEventListener('click',()=>sendTestAlert('convenzione',con.id)),50);
+  if(con) setTimeout(()=>{
+    const testBtn=$('al-test');
+    if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('convenzione',con.id));
+  },50);
 }
 
 function renderFornitori(pb){
