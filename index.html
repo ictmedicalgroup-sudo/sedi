@@ -2022,10 +2022,15 @@ function openAssetCatModal(cat){
 function openAssetSubcatModal(sc,catId){
   const cid=catId||(sc?.categoria_id);
   openM(sc?'✏ Modifica sottocategoria':'+ Nuova sottocategoria',`
-    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="asc-nome" value="${esc(sc?.nome||'')}"/></div>`,
+    <div class="fg"><div class="fl">Nome *</div><input class="fi" id="asc-nome" value="${esc(sc?.nome||'')}"/></div>
+    ${sc?`<div class="fg"><div class="fl">Categoria</div>
+      <select class="fse" id="asc-cat">
+        ${S.assetCat.map(cat=>`<option value="${cat.id}"${cat.id===sc.categoria_id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
+      </select></div>`:''}`,
   [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
     const nome=$('asc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
-    if(sc){await db('PATCH',T('asset_sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome}});S.assetSubcat=S.assetSubcat.map(x=>x.id===sc.id?{...x,nome}:x);}
+    const newCatId=sc?($('asc-cat')?.value||sc.categoria_id):cid;
+    if(sc){await db('PATCH',T('asset_sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome,categoria_id:newCatId}});S.assetSubcat=S.assetSubcat.map(x=>x.id===sc.id?{...x,nome,categoria_id:newCatId}:x);}
     else{const[ns]=await db('POST',T('asset_sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.assetSubcat.filter(x=>x.categoria_id===cid).length}});S.assetSubcat.push(ns);}
     closeM();refreshAssetStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
   }}]);
