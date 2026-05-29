@@ -280,7 +280,7 @@ const T = n => `sedi_${n}`;
    STATO
 ══════════════════════════════════════════ */
 const S = {
-  user: null, token: null, refreshToken: null,
+  user: null, token: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
   verifiche: [], convenzioni: [], alertCfg: [],
@@ -295,22 +295,22 @@ const S = {
    NAV
 ══════════════════════════════════════════ */
 const NAV_MAIN = [
-  {id:'griglia',    l:'Informazioni',  ic:'', r:['admin','utente']},
-  {id:'mappa',      l:'Mappa',         ic:'', r:['admin','utente']},
-  {id:'asset',      l:'Asset',         ic:'', r:['admin','utente','asset']},
-  {id:'costi_ric',  l:'Costi',         ic:'', r:['admin','utente','asset']},
-  {id:'verifiche',  l:'Verifiche',     ic:'', r:['admin','utente','asset']},
-  {id:'convenzioni',l:'Convenzioni',   ic:'', r:['admin','utente','asset']},
-  {id:'fornitori',  l:'Fornitori',     ic:'', r:['admin','asset']},
+  {id:'griglia',    l:'Informazioni', ic:'', r:['admin','utente']},
+  {id:'mappa',      l:'Mappa',        ic:'', r:['admin','utente']},
+  {id:'asset',      l:'Asset',        ic:'', r:['admin','utente','asset']},
+  {id:'costi_ric',  l:'Costi',        ic:'', r:['admin','utente','asset']},
+  {id:'verifiche',  l:'Verifiche',    ic:'', r:['admin','utente','asset']},
+  {id:'convenzioni',l:'Convenzioni',  ic:'', r:['admin','utente','asset']},
 ];
 const NAV_ADMIN = [
-  {id:'sedi',      l:'Sedi',          ic:'📍'},
-  {id:'ragioni',   l:'Ragioni sociali',ic:'🏛'},
-  {id:'aree',      l:'Aree geografiche',ic:'🌍'},
-  {id:'struttura', l:'Struttura',     ic:'🗂'},
-  {id:'asset_cat', l:'Asset: categorie',ic:'🔧'},
-  {id:'utenti',    l:'Utenti',        ic:'👥'},
-  {id:'log',       l:'Log',           ic:'📋'},
+  {id:'sedi',       l:'Sedi',              ic:''},
+  {id:'ragioni',    l:'Ragioni sociali',   ic:''},
+  {id:'aree',       l:'Aree geografiche',  ic:''},
+  {id:'fornitori',  l:'Fornitori',         ic:''},
+  {id:'struttura',  l:'Struttura',         ic:''},
+  {id:'asset_cat',  l:'Asset: categorie',  ic:''},
+  {id:'utenti',     l:'Utenti',            ic:''},
+  {id:'log',        l:'Log',               ic:''},
 ];
 // compatibilità con codice che usa NAV
 const NAV = [...NAV_MAIN, ...NAV_ADMIN.map(n=>({...n,r:['admin']}))];
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 /* ══════════════════════════════════════════
    SUPABASE REST
 ══════════════════════════════════════════ */
-async function db(method,table,opts={},_retry=false){
+async function db(method,table,opts={}){
   const {flt='',body=null,sel='*',ord='',lim=''}=opts;
   let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
   if(flt) url+=`&${flt}`;
@@ -394,15 +394,6 @@ async function supaLogin(email,password){
   const data=await res.json();
   if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
   return data;
-}
-async function supaRefreshToken(){
-  if(!S.refreshToken) throw new Error('Nessun refresh token');
-  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
-    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({refresh_token:S.refreshToken})});
-  const data=await res.json();
-  if(!res.ok) throw new Error('Sessione scaduta');
-  S.token=data.access_token; S.refreshToken=data.refresh_token;
 }
 async function supaLogout(){
   try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
@@ -514,8 +505,8 @@ function renderPage(){
   else if(S.page==='verifiche')  renderVerifiche(pb);
   else if(S.page==='convenzioni')renderConvenzioni(pb);
   else if(S.page==='struttura') renderStruttura(pb);
-  else if(S.page==='asset_cat') renderAssetCategorie(pb);
   else if(S.page==='aree')      renderAree(pb);
+  else if(S.page==='asset_cat') renderAssetCategorie(pb);
   else if(S.page==='utenti')    renderUtenti(pb);
   else if(S.page==='log')       renderLog(pb);
 }
@@ -1112,11 +1103,11 @@ function renderAsset(pb){
       <input class="fi-sm" id="af-search" placeholder="🔍 Cerca asset..." value="${esc(f.search)}" style="width:200px"/>
       <select class="fi-sm" id="af-cat">
         <option value="">Tutte le categorie</option>
-        ${S.assetCat.map(c=>`<option value="${c.id}"${f.catId===c.id?' selected':''}>${esc(c.icona||'')} ${esc(c.nome)}</option>`).join('')}
+        ${[...S.assetCat].sort((a,b)=>a.nome.localeCompare(b.nome)).map(cat=>`<option value="${cat.id}"${f.catId===cat.id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
       </select>
-      <select class="fi-sm" id="af-sub">
-        <option value="">Tutte le sottocategorie</option>
-        ${S.assetSubcat.filter(sc=>!f.catId||sc.categoria_id===f.catId).map(sc=>`<option value="${sc.id}"${f.subcatId===sc.id?' selected':''}>${esc(sc.nome)}</option>`).join('')}
+      <select class="fi-sm" id="af-sub" ${!f.catId?'disabled':''}>
+        <option value="">${f.catId?'Tutte le sottocategorie':'— Seleziona prima categoria —'}</option>
+        ${f.catId?[...S.assetSubcat.filter(sc=>sc.categoria_id===f.catId)].sort((a,b)=>a.nome.localeCompare(b.nome)).map(sc=>`<option value="${sc.id}"${f.subcatId===sc.id?' selected':''}>${esc(sc.nome)}</option>`).join(''):''}
       </select>
       <select class="fi-sm" id="af-sede">
         <option value="">Tutte le sedi</option>
@@ -1124,9 +1115,10 @@ function renderAsset(pb){
           const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
           const perArea={};
           sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
-          return areeOrd.filter(a=>perArea[a.id]).map(a=>
-            `<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`
-          ).join('')+(perArea['__']?`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`:'');
+          return [
+            ...areeOrd.filter(a=>perArea[a.id]).map(a=>`<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`),
+            ...(perArea['__']?[`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`]:[])
+          ].join('');
         })()}
       </select>
       <button class="btn bpg bsm" id="a-add">+ Nuovo asset</button>
@@ -1138,7 +1130,20 @@ function renderAsset(pb){
   </div>`;
 
   $('af-search').addEventListener('input',e=>{f.search=e.target.value;renderAssetTable();});
-  $('af-cat').addEventListener('change',e=>{f.catId=e.target.value;f.subcatId='';renderPage();});
+  $('af-cat').addEventListener('change',e=>{
+    f.catId=e.target.value; f.subcatId='';
+    // aggiorna select sottocategorie senza full re-render
+    const sub=$('af-sub');
+    if(sub){
+      if(!f.catId){ sub.innerHTML='<option value="">— Seleziona prima categoria —</option>'; sub.disabled=true; }
+      else {
+        const opts=[...S.assetSubcat.filter(sc=>sc.categoria_id===f.catId)].sort((a,b)=>a.nome.localeCompare(b.nome));
+        sub.innerHTML='<option value="">Tutte le sottocategorie</option>'+opts.map(sc=>`<option value="${sc.id}">${esc(sc.nome)}</option>`).join('');
+        sub.disabled=false;
+      }
+    }
+    renderAssetTable();
+  });
   $('af-sub').addEventListener('change',e=>{f.subcatId=e.target.value;renderPage();});
   $('af-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderAssetTable();});
   $('a-add').addEventListener('click',()=>openAssetModal(null));
@@ -1284,7 +1289,10 @@ async function openUbicazioniModal(assetId){
       </div>`).join('');
     $('ub-list').querySelectorAll('[data-ubdel]').forEach(b=>b.addEventListener('click',async()=>{
       await db('DELETE',T('asset_sedi'),{flt:`id=eq.${b.dataset.ubdel}`});
-      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); S._assetDirty=true; render();
+      locs.splice(locs.findIndex(x=>x.id===b.dataset.ubdel),1); S._assetDirty=true;
+      const freshSedi2=await db('GET',T('asset_sedi'),{})||[];
+      S.assetSedi=freshSedi2;
+      render(); renderAssetTable();
     }));
   };
   openM(`📍 Ubicazioni — ${a?.nome}`,`
@@ -1309,7 +1317,11 @@ async function openUbicazioniModal(assetId){
     if(!sid||!da){toast('Sede e data inizio obbligatorie','err');return;}
     const sala=$('ub-sala')?.value.trim();
     const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,sala:sala||null,note:note||null}});
-    locs.unshift(nl); S._assetDirty=true; render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
+    locs.unshift(nl); S._assetDirty=true;
+    // ricarica assetSedi freschi dal db
+    const freshSedi=await db('GET',T('asset_sedi'),{})||[];
+    S.assetSedi=freshSedi;
+    render(); renderAssetTable(); $('ub-da').value='';$('ub-a').value='';$('ub-sala').value='';$('ub-note').value='';
     toast('Ubicazione aggiunta ✅');
   });
 }
@@ -1588,11 +1600,11 @@ function renderCostiRiepilogo(pb){
 /* ══════════════════════════════════════════
    HELPERS SCADENZE
 ══════════════════════════════════════════ */
-function calcolaScadenza(ultimaVerifica,periodicita){
+function calcolaScadenza(ultimaVerifica, periodicita){
   if(!ultimaVerifica) return null;
   const d=new Date(ultimaVerifica+'T00:00:00');
   if(periodicita==='biennale') d.setFullYear(d.getFullYear()+2);
-  else d.setFullYear(d.getFullYear()+1);
+  else d.setFullYear(d.getFullYear()+1); // annuale default
   return d;
 }
 function giorniAllaScadenza(scadenza){
@@ -1600,10 +1612,10 @@ function giorniAllaScadenza(scadenza){
   const oggi=new Date(); oggi.setHours(0,0,0,0);
   return Math.ceil((scadenza-oggi)/(1000*60*60*24));
 }
-function scadenzaStyle(giorni,alert){
+function scadenzaStyle(giorni, alert){
   if(giorni===null) return '';
-  if(giorni<0) return 'background:#FDECEA';
-  if(giorni<=alert) return 'background:#FFF3CD';
+  if(giorni<0) return 'background:#FDECEA'; // scaduta
+  if(giorni<=alert) return 'background:#FFF3CD'; // in alert
   return '';
 }
 function scadenzaBadge(giorni){
@@ -1614,84 +1626,98 @@ function scadenzaBadge(giorni){
 }
 
 /* ══════════════════════════════════════════
+   PAGINA VERIFICHE
+══════════════════════════════════════════ */
+/* ══════════════════════════════════════════
    ALERT EMAIL — HELPERS
 ══════════════════════════════════════════ */
-function getCfg(tipo,refId){ return S.alertCfg.find(c=>c.tipo===tipo&&c.ref_id===refId)||null; }
+function getCfg(tipo, refId){
+  return S.alertCfg.find(c=>c.tipo===tipo&&c.ref_id===refId)||null;
+}
 
-function alertSectionHTML(tipo,refId){
+function alertSectionHTML(tipo, refId){
   const cfg=getCfg(tipo,refId);
   return `<div style="border-top:1px solid var(--g200);margin-top:16px;padding-top:14px">
     <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:10px">📧 Alert email</div>
-    <div class="fg"><div class="fl">Email destinatari (separate da virgola)</div>
-      <input class="fi" id="al-emails" value="${esc(cfg?.emails||'')}" placeholder="es. mario@esempio.it, luca@esempio.it"/></div>
-    <div class="fg"><div class="fl">Invia alert N giorni prima della scadenza (es. 1,7,30,60,120)</div>
-      <input class="fi" id="al-giorni" value="${esc(cfg?.giorni_prima||'1,7,30,60,120')}"/></div>
+    <div class="fg">
+      <div class="fl">Email destinatari (separate da virgola)</div>
+      <input class="fi" id="al-emails" value="${esc(cfg?.emails||'')}" placeholder="es. mario@esempio.it, luca@esempio.it"/>
+    </div>
+    <div class="fg">
+      <div class="fl">Invia alert N giorni prima della scadenza (es. 1,7,30,60,120)</div>
+      <input class="fi" id="al-giorni" value="${esc(cfg?.giorni_prima||'1,7,30,60,120')}"/>
+    </div>
     <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
       <label class="tw">
         <div class="tg"><input type="checkbox" id="al-attivo" ${cfg?.attivo!==false?'checked':''}><span class="tsl"></span></div>
         <span class="fl" style="margin:0">Alert attivo</span>
       </label>
-      <button class="btn bs bsm" id="al-test" type="button" ${cfg?'':'disabled style="opacity:.45;cursor:not-allowed"'}>🧪 TEST</button>
+      <button class="btn bs bsm" id="al-test" type="button" ${cfg?'':'title="Salva prima per abilitare il test"'} style="${cfg?'':'opacity:.45;cursor:not-allowed'}" ${cfg?'':'disabled'}>🧪 TEST</button>
     </div>
     ${!cfg?`<div style="font-size:11px;color:var(--g500);margin-top:4px">💡 Salva per attivare il pulsante TEST</div>`:''}
     <div id="al-test-result" style="font-size:12px;margin-top:6px"></div>
   </div>`;
 }
 
-async function saveAlertCfg(tipo,refId){
+async function saveAlertCfg(tipo, refId){
   const emails=($('al-emails')?.value||'').trim();
   const giorni=($('al-giorni')?.value||'').trim();
   const attivo=$('al-attivo')?.checked!==false;
-  if(!emails||!giorni) return;
+  if(!emails||!giorni) return; // niente da salvare
   const existing=getCfg(tipo,refId);
   const payload={tipo,ref_id:refId,emails,giorni_prima:giorni,attivo};
   if(existing){
     await db('PATCH',T('alert_config'),{flt:`id=eq.${existing.id}`,body:payload});
     S.alertCfg=S.alertCfg.map(x=>x.id===existing.id?{...x,...payload}:x);
   }else{
-    const [nc]=await db('POST',T('alert_config'),{body:payload}); S.alertCfg.push(nc);
+    const [nc]=await db('POST',T('alert_config'),{body:payload});
+    S.alertCfg.push(nc);
   }
 }
 
-async function sendTestAlert(tipo,refId){
+async function sendTestAlert(tipo, refId){
   const cfg=getCfg(tipo,refId); if(!cfg) return;
   const res=$('al-test-result'); if(res) res.textContent='Invio in corso…';
   try{
     const resp=await fetch(`${CFG.FN}/sedi-alert-scadenze`,{
-      method:'POST',headers:{'Content-Type':'application/json','Authorization':`Bearer ${S.token}`},
-      body:JSON.stringify({test:true,config_id:cfg.id})});
+      method:'POST',
+      headers:{'Content-Type':'application/json','Authorization':`Bearer ${S.token}`},
+      body:JSON.stringify({test:true,config_id:cfg.id})
+    });
     const data=await resp.json();
     if(res) res.textContent=data.ok?'✅ Email inviata!':'⚠ '+JSON.stringify(data);
   }catch(e){if(res) res.textContent='❌ '+(e instanceof Error?e.message:String(e));}
 }
 
-/* ══════════════════════════════════════════
-   PAGINA VERIFICHE
-══════════════════════════════════════════ */
 function renderVerifiche(pb){
   const isAdm=S.user?.ruolo==='admin';
   pb.innerHTML=`<div class="fian"><div class="card">
-    <div class="ch"><span class="ct">✅ Verifiche (${S.verifiche.length})</span>${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}</div>
-    ${!S.verifiche.length?`<div class="emp"><div class="emi">✅</div><div class="emt">Nessuna verifica</div></div>`:
-    `<table class="dt"><thead><tr><th>Asset</th><th>Ente verificatore</th><th>Ultima verifica</th><th>Periodicità</th><th>Prossima scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
-    ${S.verifiche.map(v=>{
-      const a=S.asset.find(x=>x.id===v.asset_id);
-      const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
-      const giorni=giorniAllaScadenza(scad);
-      const style=scadenzaStyle(giorni,v.alert_giorni||60);
-      return `<tr style="${style}">
-        <td><div class="tn">${esc(a?.nome||'—')}</div><div class="ts">${esc(a?.codice||'')}</div></td>
-        <td>${esc(v.ente_verificatore||'—')}</td>
-        <td>${fmtDate(v.ultima_verifica)}</td>
-        <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
-        <td>${scad?fmtDate(scad.toISOString().slice(0,10)):'—'}</td>
-        <td>${scadenzaBadge(giorni)}</td>
-        ${isAdm?`<td><div class="tda">
-          <button class="btn bs bsm" data-ve="${v.id}">✏</button>
-          <button class="btn bd bsm" data-vd="${v.id}">🗑</button>
-        </div></td>`:''}
-      </tr>`;
-    }).join('')}</tbody></table>`}
+    <div class="ch">
+      <span class="ct">✅ Verifiche (${S.verifiche.length})</span>
+      ${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}
+    </div>
+    ${!S.verifiche.length
+      ?`<div class="emp"><div class="emi">✅</div><div class="emt">Nessuna verifica</div></div>`
+      :`<table class="dt"><thead><tr><th>Asset</th><th>Ente verificatore</th><th>Ultima verifica</th><th>Periodicità</th><th>Prossima scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
+      ${S.verifiche.map(v=>{
+        const a=S.asset.find(x=>x.id===v.asset_id);
+        const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
+        const giorni=giorniAllaScadenza(scad);
+        const style=scadenzaStyle(giorni,v.alert_giorni||60);
+        return `<tr style="${style}">
+          <td><div class="tn">${esc(a?.nome||'—')}</div><div class="ts">${esc(a?.codice||'')}</div></td>
+          <td>${esc(v.ente_verificatore||'—')}</td>
+          <td>${fmtDate(v.ultima_verifica)}</td>
+          <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
+          <td>${scad?fmtDate(scad.toISOString().slice(0,10)):'—'}</td>
+          <td>${scadenzaBadge(giorni)}</td>
+          ${isAdm?`<td><div class="tda">
+            <button class="btn bs bsm" data-ve="${v.id}">✏</button>
+            <button class="btn bd bsm" data-vd="${v.id}">🗑</button>
+          </div></td>`:''}
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
   </div></div>`;
   if(isAdm){
     $('v-add')?.addEventListener('click',()=>openVerificaModal(null));
@@ -1707,10 +1733,10 @@ function renderVerifiche(pb){
 }
 
 function openVerificaModal(v){
-  const assetSel=v?S.asset.find(a=>a.id===v.asset_id):null;
+  const assetSelezionato=v?S.asset.find(a=>a.id===v.asset_id):null;
   const body=`
     <div class="fg"><div class="fl">Asset *</div>
-      <input class="fi" id="vm-asset-search" placeholder="🔍 Cerca per nome o codice..." value="${esc(assetSel?(assetSel.codice?assetSel.codice+' — ':'')+assetSel.nome:'')}"/>
+      <input class="fi" id="vm-asset-search" placeholder="🔍 Cerca per nome o codice..." value="${esc(assetSelezionato?(assetSelezionato.codice?assetSelezionato.codice+' — ':'')+assetSelezionato.nome:'')}"/>
       <input type="hidden" id="vm-asset" value="${v?.asset_id||''}"/>
       <div id="vm-asset-results" style="border:1px solid var(--g200);border-radius:var(--rsm);max-height:160px;overflow-y:auto;display:none;background:#fff;box-shadow:var(--sh-sm);margin-top:2px"></div>
     </div>
@@ -1739,13 +1765,18 @@ function openVerificaModal(v){
         note:$('vm-note').value.trim()||null};
       try{
         let refId=v?.id;
-        if(v){await db('PATCH',T('verifiche'),{flt:`id=eq.${v.id}`,body:payload});S.verifiche=S.verifiche.map(x=>x.id===v.id?{...x,...payload}:x);}
-        else{const [nv]=await db('POST',T('verifiche'),{body:payload});S.verifiche.push(nv);refId=nv.id;}
+        if(v){
+          await db('PATCH',T('verifiche'),{flt:`id=eq.${v.id}`,body:payload});
+          S.verifiche=S.verifiche.map(x=>x.id===v.id?{...x,...payload}:x);
+        }else{
+          const [nv]=await db('POST',T('verifiche'),{body:payload}); S.verifiche.push(nv); refId=nv.id;
+        }
         if(refId) await saveAlertCfg('verifica',refId);
-        closeM();renderPage();toast(v?'Verifica aggiornata':'Verifica aggiunta ✅');
+        closeM(); renderPage(); toast(v?'Verifica aggiornata':'Verifica aggiunta ✅');
       }catch(e){toast(e.message,'err');}
     }},
   ]);
+  // Inizializza ricerca asset
   setTimeout(()=>{
     const inp=$('vm-asset-search'),hid=$('vm-asset'),res=$('vm-asset-results');
     if(!inp) return;
@@ -1754,18 +1785,22 @@ function openVerificaModal(v){
       if(!q){res.style.display='none';hid.value='';return;}
       const matches=S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''}`.toLowerCase().includes(q)).slice(0,10);
       if(!matches.length){res.style.display='none';return;}
-      res.innerHTML=matches.map(a=>`<div data-aid="${a.id}" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)" onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
+      res.innerHTML=matches.map(a=>`<div data-aid="${a.id}" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)"
+        onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
         ${a.codice?`<span style="font-family:monospace;font-size:11px;color:var(--g500)">${esc(a.codice)}</span> — `:''}
         <strong>${esc(a.nome)}</strong>${a.marca?` <span style="color:var(--g500)">${esc(a.marca)}</span>`:''}
       </div>`).join('');
       res.style.display='block';
       res.querySelectorAll('[data-aid]').forEach(el=>el.addEventListener('click',()=>{
         const a=S.asset.find(x=>x.id===el.dataset.aid);
-        hid.value=a.id; inp.value=(a.codice?a.codice+' — ':'')+a.nome; res.style.display='none';
+        hid.value=a.id;
+        inp.value=(a.codice?a.codice+' — ':'')+a.nome;
+        res.style.display='none';
       }));
     });
     inp.addEventListener('blur',()=>setTimeout(()=>{res.style.display='none';},200));
-    inp.addEventListener('focus',()=>{if(inp.value)inp.dispatchEvent(new Event('input'));});
+    inp.addEventListener('focus',()=>{ if(inp.value) inp.dispatchEvent(new Event('input')); });
+    // TEST button (solo se esiste già una config)
     const testBtn=$('al-test');
     if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('verifica',v.id));
   },50);
@@ -1777,24 +1812,29 @@ function openVerificaModal(v){
 function renderConvenzioni(pb){
   const isAdm=S.user?.ruolo==='admin';
   pb.innerHTML=`<div class="fian"><div class="card">
-    <div class="ch"><span class="ct">🤝 Convenzioni (${S.convenzioni.length})</span>${isAdm?`<button class="btn bpg bsm" id="con-add">+ Nuova convenzione</button>`:''}</div>
-    ${!S.convenzioni.length?`<div class="emp"><div class="emi">🤝</div><div class="emt">Nessuna convenzione</div></div>`:
-    `<table class="dt"><thead><tr><th>Nome</th><th>Data stipula</th><th>Scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
-    ${S.convenzioni.map(con=>{
-      const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
-      const giorni=giorniAllaScadenza(scad);
-      const style=scadenzaStyle(giorni,con.alert_giorni||120);
-      return `<tr style="${style}">
-        <td><div class="tn">${esc(con.nome)}</div>${con.note?`<div class="ts">${esc(con.note)}</div>`:''}</td>
-        <td>${fmtDate(con.data_stipula)}</td>
-        <td>${fmtDate(con.scadenza)}</td>
-        <td>${scadenzaBadge(giorni)}</td>
-        ${isAdm?`<td><div class="tda">
-          <button class="btn bs bsm" data-cone="${con.id}">✏</button>
-          <button class="btn bd bsm" data-cond="${con.id}">🗑</button>
-        </div></td>`:''}
-      </tr>`;
-    }).join('')}</tbody></table>`}
+    <div class="ch">
+      <span class="ct">🤝 Convenzioni (${S.convenzioni.length})</span>
+      ${isAdm?`<button class="btn bpg bsm" id="con-add">+ Nuova convenzione</button>`:''}
+    </div>
+    ${!S.convenzioni.length
+      ?`<div class="emp"><div class="emi">🤝</div><div class="emt">Nessuna convenzione</div></div>`
+      :`<table class="dt"><thead><tr><th>Nome</th><th>Data stipula</th><th>Scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
+      ${S.convenzioni.map(con=>{
+        const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
+        const giorni=giorniAllaScadenza(scad);
+        const style=scadenzaStyle(giorni,con.alert_giorni||120);
+        return `<tr style="${style}">
+          <td><div class="tn">${esc(con.nome)}</div>${con.note?`<div class="ts">${esc(con.note)}</div>`:''}</td>
+          <td>${fmtDate(con.data_stipula)}</td>
+          <td>${fmtDate(con.scadenza)}</td>
+          <td>${scadenzaBadge(giorni)}</td>
+          ${isAdm?`<td><div class="tda">
+            <button class="btn bs bsm" data-cone="${con.id}">✏</button>
+            <button class="btn bd bsm" data-cond="${con.id}">🗑</button>
+          </div></td>`:''}
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
   </div></div>`;
   if(isAdm){
     $('con-add')?.addEventListener('click',()=>openConvenzioneModal(null));
@@ -1803,7 +1843,7 @@ function renderConvenzioni(pb){
       const con=S.convenzioni.find(x=>x.id===b.dataset.cond);
       openConf(`Eliminare la convenzione "${con?.nome}"?`,async()=>{
         await db('DELETE',T('convenzioni'),{flt:`id=eq.${b.dataset.cond}`});
-        S.convenzioni=S.convenzioni.filter(x=>x.id!==b.dataset.cond);renderPage();toast('Convenzione eliminata');
+        S.convenzioni=S.convenzioni.filter(x=>x.id!==b.dataset.cond); renderPage(); toast('Convenzione eliminata');
       });
     }));
   }
@@ -1817,7 +1857,7 @@ function openConvenzioneModal(con){
       <div class="fg"><div class="fl">Scadenza</div><input class="fi" id="conm-scad" type="date" value="${con?.scadenza||''}"/></div>
     </div>
     <div class="fr">
-      <div class="fg"><div class="fl">Alert (giorni prima)</div><input class="fi" id="conm-alert" type="number" min="1" value="${con?.alert_giorni??120}"/></div>
+      <div class="fg"><div class="fl">Alert (giorni prima della scadenza)</div><input class="fi" id="conm-alert" type="number" min="1" value="${con?.alert_giorni??120}"/></div>
       <div class="fg"></div>
     </div>
     <div class="fg"><div class="fl">Note</div><textarea class="fta" id="conm-note">${esc(con?.note||'')}</textarea></div>
@@ -1827,17 +1867,25 @@ function openConvenzioneModal(con){
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=$('conm-nome').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
-      const payload={nome,data_stipula:$('conm-stipula').value||null,scadenza:$('conm-scad').value||null,
-        alert_giorni:parseInt($('conm-alert').value)||120,note:$('conm-note').value.trim()||null};
+      const payload={nome,
+        data_stipula:$('conm-stipula').value||null,
+        scadenza:$('conm-scad').value||null,
+        alert_giorni:parseInt($('conm-alert').value)||120,
+        note:$('conm-note').value.trim()||null};
       try{
         let refId=con?.id;
-        if(con){await db('PATCH',T('convenzioni'),{flt:`id=eq.${con.id}`,body:payload});S.convenzioni=S.convenzioni.map(x=>x.id===con.id?{...x,...payload}:x);}
-        else{const [nc]=await db('POST',T('convenzioni'),{body:payload});S.convenzioni.push(nc);refId=nc.id;}
+        if(con){
+          await db('PATCH',T('convenzioni'),{flt:`id=eq.${con.id}`,body:payload});
+          S.convenzioni=S.convenzioni.map(x=>x.id===con.id?{...x,...payload}:x);
+        }else{
+          const [nc]=await db('POST',T('convenzioni'),{body:payload}); S.convenzioni.push(nc); refId=nc.id;
+        }
         if(refId) await saveAlertCfg('convenzione',refId);
-        closeM();renderPage();toast(con?'Convenzione aggiornata':'Convenzione aggiunta ✅');
+        closeM(); renderPage(); toast(con?'Convenzione aggiornata':'Convenzione aggiunta ✅');
       }catch(e){toast(e.message,'err');}
     }},
   ]);
+  // TEST button
   if(con) setTimeout(()=>{
     const testBtn=$('al-test');
     if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('convenzione',con.id));
@@ -2076,11 +2124,12 @@ function renderSediPage(pb){
         <span style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px">📍 ${esc(area)}</span>
         <span style="font-size:11px;color:var(--g400)">↕ trascina per riordinare</span>
       </div>
-      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
+      <table class="dt"><thead><tr><th style="width:30px"></th><th>Nome</th><th>Ragione sociale</th><th>Indirizzo</th><th>Coord.</th><th>Stato</th><th>Azioni</th></tr></thead>
       <tbody class="sortable-area" data-area="${esc(area)}">
         ${sediArea.map(s=>`<tr data-id="${s.id}" style="cursor:grab">
           <td style="color:var(--g300);font-size:16px;text-align:center">⠿</td>
           <td><div class="tn">${esc(s.nome)}</div></td>
+          <td style="font-size:12px;color:var(--g500)">${esc(S.ragioni.find(r=>r.id===s.ragione_sociale_id)?.nome||'—')}</td>
           <td>${esc(s.indirizzo||'—')}</td>
           <td>${s.lat&&s.lng?`<span style="font-size:11px;font-family:monospace">${s.lat.toFixed(4)}, ${s.lng.toFixed(4)}</span>`:'—'}</td>
           <td><span class="bg ${s.attiva?'bg-on':'bg-off'}">${s.attiva?'Attiva':'Inattiva'}</span></td>
@@ -2426,13 +2475,8 @@ function openSubcatModal(sc,catId){
   [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
     const nome=$('sc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
     const newCatId=sc?($('sc-cat')?.value||sc.categoria_id):cid;
-    if(sc){
-      await db('PATCH',T('sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome,categoria_id:newCatId}});
-      S.sottocategorie=S.sottocategorie.map(x=>x.id===sc.id?{...x,nome,categoria_id:newCatId}:x);
-    }else{
-      const[ns]=await db('POST',T('sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.sottocategorie.filter(x=>x.categoria_id===cid).length}});
-      S.sottocategorie.push(ns);
-    }
+    if(sc){await db('PATCH',T('sottocategorie'),{flt:`id=eq.${sc.id}`,body:{nome,categoria_id:newCatId}});S.sottocategorie=S.sottocategorie.map(x=>x.id===sc.id?{...x,nome,categoria_id:newCatId}:x);}
+    else{const[ns]=await db('POST',T('sottocategorie'),{body:{nome,categoria_id:cid,ordine:S.sottocategorie.filter(x=>x.categoria_id===cid).length}});S.sottocategorie.push(ns);}
     closeM();refreshStruttura();toast(sc?'Sottocategoria aggiornata':'Sottocategoria aggiunta ✅');
   }}]);
 }
@@ -2703,7 +2747,7 @@ async function doLogin(){
   btn.innerHTML='<span class="spn"></span> Accesso…'; btn.disabled=true;
   try{
     const auth=await supaLogin(email,pwd);
-    S.token=auth.access_token; S.refreshToken=auth.refresh_token;
+    S.token=auth.access_token;
     const [profilo]=await db('GET',T('profili'),{flt:`id=eq.${auth.user.id}`});
     if(!profilo) throw new Error('Profilo non trovato. Contatta l\'amministratore.');
     if(profilo.attivo===false) throw new Error('Utente disabilitato. Contatta l\'amministratore.');
@@ -2720,7 +2764,7 @@ async function doLogin(){
 }
 async function doLogout(){
   await supaLogout();
-  S.user=null;S.token=null;S.refreshToken=null;
+  S.user=null;S.token=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
 }
 $('lbtn').addEventListener('click',doLogin);
