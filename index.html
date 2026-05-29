@@ -421,7 +421,7 @@ async function loadAll(){
     db('GET',T('fornitori'),{ord:'nome.asc'}),
     db('GET',T('costi'),{ord:'data_costo.desc'}),
     db('GET',T('verifiche'),{ord:'ultima_verifica.desc'}),
-    db('GET',T('convenzioni'),{ord:'ultima_verifica.desc'}),
+    db('GET',T('convenzioni'),{ord:'scadenza.asc'}),
   ]);
   S.aree=aree||[];S.sedi=sedi||[];S.ragioni=ragioni||[];S.categorie=categorie||[];
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
@@ -1738,16 +1738,15 @@ function renderConvenzioni(pb){
     </div>
     ${!S.convenzioni.length
       ?`<div class="emp"><div class="emi">🤝</div><div class="emt">Nessuna convenzione</div></div>`
-      :`<table class="dt"><thead><tr><th>Nome</th><th>Ultima verifica</th><th>Periodicità</th><th>Prossima scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
+      :`<table class="dt"><thead><tr><th>Nome</th><th>Data stipula</th><th>Scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
       ${S.convenzioni.map(con=>{
-        const scad=calcolaScadenza(con.ultima_verifica,con.periodicita);
+        const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
         const giorni=giorniAllaScadenza(scad);
-        const style=scadenzaStyle(giorni,con.alert_giorni||60);
+        const style=scadenzaStyle(giorni,con.alert_giorni||120);
         return `<tr style="${style}">
           <td><div class="tn">${esc(con.nome)}</div>${con.note?`<div class="ts">${esc(con.note)}</div>`:''}</td>
-          <td>${fmtDate(con.ultima_verifica)}</td>
-          <td><span class="bg bg-usr">${con.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
-          <td>${scad?fmtDate(scad.toISOString().slice(0,10)):'—'}</td>
+          <td>${fmtDate(con.data_stipula)}</td>
+          <td>${fmtDate(con.scadenza)}</td>
           <td>${scadenzaBadge(giorni)}</td>
           ${isAdm?`<td><div class="tda">
             <button class="btn bs bsm" data-cone="${con.id}">✏</button>
@@ -1774,25 +1773,23 @@ function openConvenzioneModal(con){
   const body=`
     <div class="fg"><div class="fl">Nome convenzione *</div><input class="fi" id="conm-nome" value="${esc(con?.nome||'')}"/></div>
     <div class="fr">
-      <div class="fg"><div class="fl">Ultima verifica</div><input class="fi" id="conm-data" type="date" value="${con?.ultima_verifica||''}"/></div>
-      <div class="fg"><div class="fl">Periodicità</div>
-        <select class="fse" id="conm-per">
-          <option value="annuale"${con?.periodicita!=='biennale'?' selected':''}>Annuale</option>
-          <option value="biennale"${con?.periodicita==='biennale'?' selected':''}>Biennale</option>
-        </select></div>
+      <div class="fg"><div class="fl">Data stipula</div><input class="fi" id="conm-stipula" type="date" value="${con?.data_stipula||''}"/></div>
+      <div class="fg"><div class="fl">Scadenza</div><input class="fi" id="conm-scad" type="date" value="${con?.scadenza||''}"/></div>
     </div>
     <div class="fr">
-      <div class="fg"><div class="fl">Alert (giorni prima)</div><input class="fi" id="conm-alert" type="number" min="1" value="${con?.alert_giorni??60}"/></div>
+      <div class="fg"><div class="fl">Alert (giorni prima della scadenza)</div><input class="fi" id="conm-alert" type="number" min="1" value="${con?.alert_giorni??120}"/></div>
       <div class="fg"></div>
     </div>
     <div class="fg"><div class="fl">Note</div><textarea class="fta" id="conm-note">${esc(con?.note||'')}</textarea></div>`;
   openM(con?'✏ Modifica convenzione':'+ Nuova convenzione',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
-      const nome=$('conm-nome').value.trim(),data=$('conm-data').value;
+      const nome=$('conm-nome').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
-      const payload={nome,ultima_verifica:data||null,periodicita:$('conm-per').value,
-        alert_giorni:parseInt($('conm-alert').value)||60,
+      const payload={nome,
+        data_stipula:$('conm-stipula').value||null,
+        scadenza:$('conm-scad').value||null,
+        alert_giorni:parseInt($('conm-alert').value)||120,
         note:$('conm-note').value.trim()||null};
       try{
         if(con){
