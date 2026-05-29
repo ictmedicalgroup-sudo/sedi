@@ -1697,26 +1697,61 @@ async function sendTestAlert(tipo, refId){
 
 function renderVerifiche(pb){
   const isAdm=S.user?.ruolo==='admin';
+  if(!S.vf) S.vf={search:'',sort:'giorni'}; // stato filtri verifiche
+  const f=S.vf;
+
+  const oggi=new Date(); oggi.setHours(0,0,0,0);
+  let lista=S.verifiche.map(v=>{
+    const a=S.asset.find(x=>x.id===v.asset_id);
+    const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
+    const giorni=giorniAllaScadenza(scad);
+    return {...v,_asset:a,_scad:scad,_giorni:giorni};
+  }).filter(v=>{
+    if(!f.search) return true;
+    const q=f.search.toLowerCase();
+    return (v._asset?.nome||'').toLowerCase().includes(q)||
+           (v._asset?.codice||'').toLowerCase().includes(q)||
+           (v.ente_verificatore||'').toLowerCase().includes(q);
+  });
+
+  // ordinamento
+  lista.sort((a,b)=>{
+    if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
+    if(f.sort==='asset') return (a._asset?.nome||'').localeCompare(b._asset?.nome||'');
+    if(f.sort==='ultima') return (a.ultima_verifica||'').localeCompare(b.ultima_verifica||'');
+    return 0;
+  });
+
+  const thSort=(col,lbl)=>`<th style="cursor:pointer;user-select:none" data-sort="${col}">${lbl}${f.sort===col?' ↑':''}</th>`;
+
   pb.innerHTML=`<div class="fian"><div class="card">
     <div class="ch">
-      <span class="ct">✅ Verifiche (${S.verifiche.length})</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="ct">Verifiche (${lista.length}/${S.verifiche.length})</span>
+        <input class="fi-sm" id="vf-search" placeholder="🔍 Cerca asset, ente..." value="${esc(f.search)}" style="width:220px"/>
+      </div>
       ${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}
     </div>
-    ${!S.verifiche.length
-      ?`<div class="emp"><div class="emi">✅</div><div class="emt">Nessuna verifica</div></div>`
-      :`<table class="dt"><thead><tr><th>Asset</th><th>Ente verificatore</th><th>Ultima verifica</th><th>Periodicità</th><th>Prossima scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
-      ${S.verifiche.map(v=>{
-        const a=S.asset.find(x=>x.id===v.asset_id);
-        const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
-        const giorni=giorniAllaScadenza(scad);
-        const style=scadenzaStyle(giorni,v.alert_giorni||60);
+    ${!lista.length
+      ?`<div class="emp"><div class="emi">✅</div><div class="emt">${S.verifiche.length?'Nessun risultato':'Nessuna verifica'}</div></div>`
+      :`<table class="dt"><thead><tr>
+          ${thSort('asset','Asset')}
+          <th>Ente verificatore</th>
+          ${thSort('ultima','Ultima verifica')}
+          <th>Periodicità</th>
+          <th>Prossima scadenza</th>
+          ${thSort('giorni','Scade tra')}
+          ${isAdm?'<th>Azioni</th>':''}
+        </tr></thead><tbody>
+      ${lista.map(v=>{
+        const style=scadenzaStyle(v._giorni,v.alert_giorni||60);
         return `<tr style="${style}">
-          <td><div class="tn">${esc(a?.nome||'—')}</div><div class="ts">${esc(a?.codice||'')}</div></td>
+          <td><div class="tn">${esc(v._asset?.nome||'—')}</div><div class="ts">${esc(v._asset?.codice||'')}</div></td>
           <td>${esc(v.ente_verificatore||'—')}</td>
           <td>${fmtDate(v.ultima_verifica)}</td>
           <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
-          <td>${scad?fmtDate(scad.toISOString().slice(0,10)):'—'}</td>
-          <td>${scadenzaBadge(giorni)}</td>
+          <td>${v._scad?fmtDate(v._scad.toISOString().slice(0,10)):'—'}</td>
+          <td>${scadenzaBadge(v._giorni)}</td>
           ${isAdm?`<td><div class="tda">
             <button class="btn bs bsm" data-ve="${v.id}">✏</button>
             <button class="btn bd bsm" data-vd="${v.id}">🗑</button>
@@ -1725,6 +1760,9 @@ function renderVerifiche(pb){
       }).join('')}
       </tbody></table>`}
   </div></div>`;
+
+  $('vf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('v-add')?.addEventListener('click',()=>openVerificaModal(null));
     pb.querySelectorAll('[data-ve]').forEach(b=>b.addEventListener('click',()=>openVerificaModal(S.verifiche.find(x=>x.id===b.dataset.ve))));
@@ -1817,31 +1855,60 @@ function openVerificaModal(v){
 ══════════════════════════════════════════ */
 function renderConvenzioni(pb){
   const isAdm=S.user?.ruolo==='admin';
+  if(!S.conf) S.conf={search:'',sort:'giorni'};
+  const f=S.conf;
+
+  let lista=S.convenzioni.map(con=>{
+    const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
+    const giorni=giorniAllaScadenza(scad);
+    return {...con,_scad:scad,_giorni:giorni};
+  }).filter(con=>{
+    if(!f.search) return true;
+    const q=f.search.toLowerCase();
+    return (con.nome||'').toLowerCase().includes(q)||(con.note||'').toLowerCase().includes(q);
+  });
+
+  lista.sort((a,b)=>{
+    if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
+    if(f.sort==='nome') return (a.nome||'').localeCompare(b.nome||'');
+    if(f.sort==='scadenza') return (a.scadenza||'').localeCompare(b.scadenza||'');
+    return 0;
+  });
+
+  const thSort=(col,lbl)=>`<th style="cursor:pointer;user-select:none" data-sort="${col}">${lbl}${f.sort===col?' ↑':''}</th>`;
+
   pb.innerHTML=`<div class="fian"><div class="card">
     <div class="ch">
-      <span class="ct">🤝 Convenzioni (${S.convenzioni.length})</span>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="ct">Convenzioni (${lista.length}/${S.convenzioni.length})</span>
+        <input class="fi-sm" id="conf-search" placeholder="🔍 Cerca..." value="${esc(f.search)}" style="width:200px"/>
+      </div>
       ${isAdm?`<button class="btn bpg bsm" id="con-add">+ Nuova convenzione</button>`:''}
     </div>
-    ${!S.convenzioni.length
-      ?`<div class="emp"><div class="emi">🤝</div><div class="emt">Nessuna convenzione</div></div>`
-      :`<table class="dt"><thead><tr><th>Nome</th><th>Data stipula</th><th>Scadenza</th><th>Scade tra</th>${isAdm?'<th>Azioni</th>':''}</tr></thead><tbody>
-      ${S.convenzioni.map(con=>{
-        const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
-        const giorni=giorniAllaScadenza(scad);
-        const style=scadenzaStyle(giorni,con.alert_giorni||120);
-        return `<tr style="${style}">
+    ${!lista.length
+      ?`<div class="emp"><div class="emi">🤝</div><div class="emt">${S.convenzioni.length?'Nessun risultato':'Nessuna convenzione'}</div></div>`
+      :`<table class="dt"><thead><tr>
+          ${thSort('nome','Nome')}
+          <th>Data stipula</th>
+          ${thSort('scadenza','Scadenza')}
+          ${thSort('giorni','Scade tra')}
+          ${isAdm?'<th>Azioni</th>':''}
+        </tr></thead><tbody>
+      ${lista.map(con=>`<tr style="${scadenzaStyle(con._giorni,con.alert_giorni||120)}">
           <td><div class="tn">${esc(con.nome)}</div>${con.note?`<div class="ts">${esc(con.note)}</div>`:''}</td>
           <td>${fmtDate(con.data_stipula)}</td>
           <td>${fmtDate(con.scadenza)}</td>
-          <td>${scadenzaBadge(giorni)}</td>
+          <td>${scadenzaBadge(con._giorni)}</td>
           ${isAdm?`<td><div class="tda">
             <button class="btn bs bsm" data-cone="${con.id}">✏</button>
             <button class="btn bd bsm" data-cond="${con.id}">🗑</button>
           </div></td>`:''}
-        </tr>`;
-      }).join('')}
+        </tr>`).join('')}
       </tbody></table>`}
   </div></div>`;
+
+  $('conf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('con-add')?.addEventListener('click',()=>openConvenzioneModal(null));
     pb.querySelectorAll('[data-cone]').forEach(b=>b.addEventListener('click',()=>openConvenzioneModal(S.convenzioni.find(x=>x.id===b.dataset.cone))));
@@ -1957,7 +2024,7 @@ function openFornitoreModal(f){
 
 function buildAssetStrutturaHTML(){
   if(!S.assetCat.length) return `<div class="emp"><div class="emi">🔧</div><div class="emt">Nessuna categoria asset</div><div class="ems">Es. Macchine diagnostiche, Software…</div></div>`;
-  return S.assetCat.map(cat=>`
+  return [...S.assetCat].sort((a,b)=>a.nome.localeCompare(b.nome)).map(cat=>`
     <div class="str-cat">
       <div class="str-cat-hdr">
         <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${cat.icona||'📦'}</span><span style="font-weight:700">${esc(cat.nome)}</span></div>
