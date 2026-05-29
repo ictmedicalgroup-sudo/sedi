@@ -280,7 +280,7 @@ const T = n => `sedi_${n}`;
    STATO
 ══════════════════════════════════════════ */
 const S = {
-  user: null, token: null,
+  user: null, token: null, refreshToken: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
   verifiche: [], convenzioni: [], alertCfg: [],
@@ -376,7 +376,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 /* ══════════════════════════════════════════
    SUPABASE REST
 ══════════════════════════════════════════ */
-async function db(method,table,opts={}){
+async function db(method,table,opts={},_retry=false){
   const {flt='',body=null,sel='*',ord='',lim=''}=opts;
   let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
   if(flt) url+=`&${flt}`;
@@ -394,6 +394,15 @@ async function supaLogin(email,password){
   const data=await res.json();
   if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
   return data;
+}
+async function supaRefreshToken(){
+  if(!S.refreshToken) throw new Error('Nessun refresh token');
+  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
+    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:S.refreshToken})});
+  const data=await res.json();
+  if(!res.ok) throw new Error('Sessione scaduta');
+  S.token=data.access_token; S.refreshToken=data.refresh_token;
 }
 async function supaLogout(){
   try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
@@ -1111,7 +1120,14 @@ function renderAsset(pb){
       </select>
       <select class="fi-sm" id="af-sede">
         <option value="">Tutte le sedi</option>
-        ${sediOrdinate().map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}
+        ${(()=>{
+          const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+          const perArea={};
+          sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
+          return areeOrd.filter(a=>perArea[a.id]).map(a=>
+            `<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`
+          ).join('')+(perArea['__']?`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`:'');
+        })()}
       </select>
       <button class="btn bpg bsm" id="a-add">+ Nuovo asset</button>
     </div>
@@ -1210,7 +1226,7 @@ function openAssetModal(a){
     </div>
     <div class="fr">
       <div class="fg"><div class="fl">Anno</div><input class="fi" id="am-anno" type="number" min="1900" max="2100" value="${a?.anno||''}" placeholder="es. 2021"/></div>
-      <div class="fg"></div>
+      <div class="fg"><div class="fl">Data collaudo</div><input class="fi" id="am-collaudo" type="date" value="${a?.collaudo||''}"/></div>
     </div>
     <div class="fg"><div class="fl">Categoria</div>
       <select class="fse" id="am-cat" onchange="document.getElementById('am-sub').innerHTML='<option value=\\'\\'>— Nessuna —</option>'+S.assetSubcat.filter(sc=>sc.categoria_id===this.value).map(sc=>'<option value=\\''+sc.id+'\\'>'+(sc.nome)+'</option>').join('')">
@@ -1232,8 +1248,8 @@ function openAssetModal(a){
       const sub=$('am-sub').value,note=$('am-note').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const marca=$('am-marca').value.trim(),seriale=$('am-seriale').value.trim(),anno=$('am-anno').value;
-        const payload={nome,codice:cod||null,marca:marca||null,seriale:seriale||null,anno:anno?parseInt(anno):null,sottocategoria_id:sub||null,note:note||null};
+        const marca=$('am-marca').value.trim(),seriale=$('am-seriale').value.trim(),anno=$('am-anno').value,collaudo=$('am-collaudo').value;
+        const payload={nome,codice:cod||null,marca:marca||null,seriale:seriale||null,anno:anno?parseInt(anno):null,collaudo:collaudo||null,sottocategoria_id:sub||null,note:note||null};
         if(a){
           await db('PATCH',T('asset'),{flt:`id=eq.${a.id}`,body:payload});
           S.asset=S.asset.map(x=>x.id===a.id?{...x,...payload}:x);
@@ -1261,7 +1277,7 @@ async function openUbicazioniModal(assetId){
       locs.map(l=>`<div style="display:flex;align-items:center;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--g100)">
         <div>
           <div style="font-weight:600;font-size:13px">${esc(sedeNome(l.sede_id))}</div>
-          <div style="font-size:11px;color:var(--g500)">${fmtDate(l.data_da)} → ${l.data_a?fmtDate(l.data_a):'in corso'}</div>
+          <div style="font-size:11px;color:var(--g500)">${fmtDate(l.data_da)} → ${l.data_a?fmtDate(l.data_a):'in corso'}${l.sala?` · Sala: ${esc(l.sala)}`:''}</div>
           ${l.note?`<div style="font-size:11px;color:var(--g500)">${esc(l.note)}</div>`:''}
         </div>
         <button class="btn bd bsm" data-ubdel="${l.id}">🗑</button>
@@ -1281,14 +1297,18 @@ async function openUbicazioniModal(assetId){
         <div class="fg"><div class="fl">Da</div><input class="fi" id="ub-da" type="date"/></div>
         <div class="fg"><div class="fl">A (vuoto = in corso)</div><input class="fi" id="ub-a" type="date"/></div>
       </div>
-      <div class="fg"><div class="fl">Note</div><input class="fi" id="ub-note"/></div>
+      <div class="fr">
+        <div class="fg"><div class="fl">Sala / stanza</div><input class="fi" id="ub-sala"/></div>
+        <div class="fg"><div class="fl">Note</div><input class="fi" id="ub-note"/></div>
+      </div>
       <button class="btn bpg bsm" id="ub-save">Aggiungi</button>
     </div>`,[{l:'Chiudi',c:'bs',a:closeM}]);
   render();
   $('ub-save').addEventListener('click',async()=>{
     const sid=$('ub-sede').value,da=$('ub-da').value,a_=$('ub-a').value,note=$('ub-note').value.trim();
     if(!sid||!da){toast('Sede e data inizio obbligatorie','err');return;}
-    const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,note:note||null}});
+    const sala=$('ub-sala')?.value.trim();
+    const [nl]=await db('POST',T('asset_sedi'),{body:{asset_id:assetId,sede_id:sid,data_da:da,data_a:a_||null,sala:sala||null,note:note||null}});
     locs.unshift(nl); S._assetDirty=true; render(); $('ub-da').value='';$('ub-a').value='';$('ub-note').value='';
     toast('Ubicazione aggiunta ✅');
   });
@@ -2683,7 +2703,7 @@ async function doLogin(){
   btn.innerHTML='<span class="spn"></span> Accesso…'; btn.disabled=true;
   try{
     const auth=await supaLogin(email,pwd);
-    S.token=auth.access_token;
+    S.token=auth.access_token; S.refreshToken=auth.refresh_token;
     const [profilo]=await db('GET',T('profili'),{flt:`id=eq.${auth.user.id}`});
     if(!profilo) throw new Error('Profilo non trovato. Contatta l\'amministratore.');
     if(profilo.attivo===false) throw new Error('Utente disabilitato. Contatta l\'amministratore.');
@@ -2700,7 +2720,7 @@ async function doLogin(){
 }
 async function doLogout(){
   await supaLogout();
-  S.user=null;S.token=null;
+  S.user=null;S.token=null;S.refreshToken=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
 }
 $('lbtn').addEventListener('click',doLogin);
