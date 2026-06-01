@@ -283,7 +283,7 @@ const S = {
   user: null, token: null, refreshToken: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
-  verifiche: [], convenzioni: [], alertCfg: [],
+  verifiche: [], convenzioni: [], alertCfg: [], impianti: [], impiantiScadenze: [],
   page: 'griglia',
   // filtri griglia
   griglia: { search: '', catIds: [], sediSel: [] },
@@ -382,6 +382,15 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 /* ══════════════════════════════════════════
    SUPABASE REST
 ══════════════════════════════════════════ */
+async function supaRefreshToken(){
+  if(!S.refreshToken) throw new Error('Nessun refresh token');
+  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
+    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:S.refreshToken})});
+  const data=await res.json();
+  if(!res.ok) throw new Error('Sessione scaduta');
+  S.token=data.access_token; S.refreshToken=data.refresh_token;
+}
 async function db(method,table,opts={},_retry=false){
   const {flt='',body=null,sel='*',ord='',lim=''}=opts;
   let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
@@ -391,6 +400,10 @@ async function db(method,table,opts={},_retry=false){
   const headers={'apikey':CFG.KEY,'Authorization':`Bearer ${S.token||CFG.KEY}`,'Content-Type':'application/json',
     'Prefer':method==='POST'?'return=representation':method==='PATCH'?'return=representation':''};
   const res=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined});
+  if(res.status===401&&!_retry&&S.refreshToken){
+    try{await supaRefreshToken();return db(method,table,opts,true);}
+    catch(e){doLogout();throw new Error('Sessione scaduta, effettua nuovamente il login');}
+  }
   if(!res.ok){const e=await res.text();throw new Error(`${method} ${table}: ${e}`);}
   return method==='DELETE'?null:res.json();
 }
@@ -400,15 +413,6 @@ async function supaLogin(email,password){
   const data=await res.json();
   if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
   return data;
-}
-async function supaRefreshToken(){
-  if(!S.refreshToken) throw new Error('Nessun refresh token');
-  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
-    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
-    body:JSON.stringify({refresh_token:S.refreshToken})});
-  const data=await res.json();
-  if(!res.ok) throw new Error('Sessione scaduta');
-  S.token=data.access_token; S.refreshToken=data.refresh_token;
 }
 async function supaLogout(){
   try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
@@ -421,7 +425,7 @@ async function logAct(azione,dettaglio){
    CARICAMENTO DATI
 ══════════════════════════════════════════ */
 async function loadAll(){
-  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,assetSedi,fornitori,costi,verifiche,convenzioni,alertCfg]=await Promise.all([
+  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,assetSedi,fornitori,costi,verifiche,convenzioni,alertCfg,impianti,impiantiScadenze]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('ragioni_sociali'),{ord:'nome.asc'}),
@@ -440,6 +444,8 @@ async function loadAll(){
     db('GET',T('verifiche'),{ord:'ultima_verifica.desc'}),
     db('GET',T('convenzioni'),{ord:'scadenza.asc'}),
     db('GET',T('alert_config'),{ord:'created_at.asc'}),
+    db('GET',T('impianti'),{ord:'nome.asc'}),
+    db('GET',T('impianti_scadenze'),{ord:'data_scadenza.asc'}),
   ]);
   S.aree=aree||[];S.sedi=sedi||[];S.ragioni=ragioni||[];S.categorie=categorie||[];
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
@@ -447,6 +453,7 @@ async function loadAll(){
   S.assetCat=assetCat||[];S.assetSubcat=assetSubcat||[];S.asset=asset||[];
   S.assetSedi=assetSedi||[];S.fornitori=fornitori||[];S.costi=costi||[];
   S.verifiche=verifiche||[];S.convenzioni=convenzioni||[];S.alertCfg=alertCfg||[];
+  S.impianti=impianti||[];S.impiantiScadenze=impiantiScadenze||[];
   // init sedi sel default (tutte)
   if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
   // mappa: default nessuna sede selezionata (popup tutti chiusi)
@@ -519,6 +526,7 @@ function renderPage(){
   else if(S.page==='fornitori') renderFornitori(pb);
   else if(S.page==='verifiche')  renderVerifiche(pb);
   else if(S.page==='convenzioni')renderConvenzioni(pb);
+  else if(S.page==='impianti')   renderImpianti(pb);
   else if(S.page==='struttura') renderStruttura(pb);
   else if(S.page==='aree')      renderAree(pb);
   else if(S.page==='asset_cat') renderAssetCategorie(pb);
@@ -1714,7 +1722,10 @@ function renderVerifiche(pb){
     const a=S.asset.find(x=>x.id===v.asset_id);
     const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
     const giorni=giorniAllaScadenza(scad);
-    return {...v,_asset:a,_scad:scad,_giorni:giorni};
+    const oggi2=new Date(); oggi2.setHours(0,0,0,0);
+    return {...v,_asset:a,_scad:scad,_giorni:giorni,
+      _sede:(()=>{const ub=S.assetSedi.filter(x=>x.asset_id===v.asset_id&&x.data_da<=new Date().toISOString().slice(0,10)&&(!x.data_a||x.data_a>=new Date().toISOString().slice(0,10))).sort((a,b)=>b.data_da.localeCompare(a.data_da))[0];return ub?S.sedi.find(s=>s.id===ub.sede_id):null;})()
+    };
   }).filter(v=>{
     if(!f.search) return true;
     const q=f.search.toLowerCase();
@@ -1728,6 +1739,7 @@ function renderVerifiche(pb){
     if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
     if(f.sort==='asset') return (a._asset?.nome||'').localeCompare(b._asset?.nome||'');
     if(f.sort==='ultima') return (a.ultima_verifica||'').localeCompare(b.ultima_verifica||'');
+    if(f.sort==='sede') return (a._sede?.nome||'').localeCompare(b._sede?.nome||'');
     return 0;
   });
 
@@ -1745,6 +1757,7 @@ function renderVerifiche(pb){
       ?`<div class="emp"><div class="emi">✅</div><div class="emt">${S.verifiche.length?'Nessun risultato':'Nessuna verifica'}</div></div>`
       :`<table class="dt"><thead><tr>
           ${thSort('asset','Asset')}
+          ${thSort('sede','Sede')}
           <th>Ente verificatore</th>
           ${thSort('ultima','Ultima verifica')}
           <th>Periodicità</th>
@@ -1756,6 +1769,7 @@ function renderVerifiche(pb){
         const style=scadenzaStyle(v._giorni,v.alert_giorni||60);
         return `<tr style="${style}">
           <td><div class="tn">${esc(v._asset?.nome||'—')}</div><div class="ts">${esc(v._asset?.codice||'')}</div></td>
+          <td>${v._sede?`<span class="bg bg-on" style="font-size:11px">${esc(v._sede.nome)}</span>`:'<span style="color:var(--g400)">—</span>'}</td>
           <td>${esc(v.ente_verificatore||'—')}</td>
           <td>${fmtDate(v.ultima_verifica)}</td>
           <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
@@ -1972,6 +1986,180 @@ function openConvenzioneModal(con){
     const testBtn=$('al-test');
     if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('convenzione',con.id));
   },50);
+}
+
+/* ══════════════════════════════════════════
+   PAGINA IMPIANTI
+══════════════════════════════════════════ */
+function renderImpianti(pb){
+  const isAdm=S.user?.ruolo==='admin';
+  if(!S.impf) S.impf={search:'',sort:'giorni'};
+  const f=S.impf;
+
+  // Arricchisci impianti con la scadenza più vicina
+  let lista=S.impianti.map(imp=>{
+    const scadenze=S.impiantiScadenze.filter(s=>s.impianto_id===imp.id);
+    const prossima=scadenze
+      .filter(s=>s.data_scadenza)
+      .sort((a,b)=>a.data_scadenza.localeCompare(b.data_scadenza))[0]||null;
+    const giorni=prossima?giorniAllaScadenza(new Date(prossima.data_scadenza+'T00:00:00')):null;
+    const alertGiorni=prossima?.alert_giorni||60;
+    return {...imp,_scadenze:scadenze,_prossima:prossima,_giorni:giorni,_alertGiorni:alertGiorni};
+  }).filter(imp=>{
+    if(!f.search) return true;
+    const q=f.search.toLowerCase();
+    return (imp.nome||'').toLowerCase().includes(q)||(imp.note||'').toLowerCase().includes(q);
+  });
+
+  lista.sort((a,b)=>{
+    if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
+    if(f.sort==='nome') return (a.nome||'').localeCompare(b.nome||'');
+    return 0;
+  });
+
+  const thSort=(col,lbl)=>`<th style="cursor:pointer;user-select:none" data-sort="${col}">${lbl}${f.sort===col?' ↑':''}</th>`;
+
+  pb.innerHTML=`<div class="fian"><div class="card">
+    <div class="ch">
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
+        <span class="ct">Impianti (${lista.length}/${S.impianti.length})</span>
+        <input class="fi-sm" id="impf-search" placeholder="🔍 Cerca impianto..." value="${esc(f.search)}" style="width:200px"/>
+      </div>
+      ${isAdm?`<button class="btn bpg bsm" id="imp-add">+ Nuovo impianto</button>`:''}
+    </div>
+    ${!lista.length
+      ?`<div class="emp"><div class="emi">🏗</div><div class="emt">${S.impianti.length?'Nessun risultato':'Nessun impianto'}</div></div>`
+      :`<table class="dt"><thead><tr>
+          ${thSort('nome','Impianto')}
+          <th>Prossima scadenza</th>
+          ${thSort('giorni','Scade tra')}
+          <th>Scadenze</th>
+          ${isAdm?'<th>Azioni</th>':''}
+        </tr></thead><tbody>
+      ${lista.map(imp=>{
+        const style=imp._giorni!==null?scadenzaStyle(imp._giorni,imp._alertGiorni):'';
+        return `<tr style="${style}">
+          <td><div class="tn">${esc(imp.nome)}</div>${imp.note?`<div class="ts">${esc(imp.note)}</div>`:''}</td>
+          <td>${imp._prossima?`<span style="font-size:12px">${esc(imp._prossima.nome||'')} — ${fmtDate(imp._prossima.data_scadenza)}</span>`:'—'}</td>
+          <td>${imp._giorni!==null?scadenzaBadge(imp._giorni):'—'}</td>
+          <td><span class="bg bg-usr">${imp._scadenze.length} scadenz${imp._scadenze.length===1?'a':'e'}</span></td>
+          ${isAdm?`<td><div class="tda">
+            <button class="btn bs bsm" data-impe="${imp.id}">✏</button>
+            <button class="btn bd bsm" data-impd="${imp.id}">🗑</button>
+          </div></td>`:''}
+        </tr>`;
+      }).join('')}
+      </tbody></table>`}
+  </div></div>`;
+
+  $('impf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
+  if(isAdm){
+    $('imp-add')?.addEventListener('click',()=>openImpiantoModal(null));
+    pb.querySelectorAll('[data-impe]').forEach(b=>b.addEventListener('click',()=>openImpiantoModal(S.impianti.find(x=>x.id===b.dataset.impe))));
+    pb.querySelectorAll('[data-impd]').forEach(b=>b.addEventListener('click',()=>{
+      const imp=S.impianti.find(x=>x.id===b.dataset.impd);
+      openConf(`Eliminare l'impianto "${imp?.nome}"? Tutte le scadenze verranno eliminate.`,async()=>{
+        await db('DELETE',T('impianti'),{flt:`id=eq.${b.dataset.impd}`});
+        S.impianti=S.impianti.filter(x=>x.id!==b.dataset.impd);
+        S.impiantiScadenze=S.impiantiScadenze.filter(x=>x.impianto_id!==b.dataset.impd);
+        renderPage(); toast('Impianto eliminato');
+      });
+    }));
+  }
+}
+
+async function openImpiantoModal(imp){
+  // Carica scadenze esistenti
+  let scadenze=imp?[...S.impiantiScadenze.filter(s=>s.impianto_id===imp.id)]:[];
+
+  function buildScadenzeHTML(){
+    return scadenze.map((s,i)=>`
+      <div class="str-campo" style="background:var(--g50);border-radius:var(--rsm);padding:10px;margin-bottom:8px;display:block" id="sc-block-${i}">
+        <div class="fr" style="margin-bottom:8px">
+          <div class="fg" style="margin:0"><div class="fl">Nome scadenza *</div>
+            <input class="fi" id="sc-nome-${i}" value="${esc(s.nome||'')}"/></div>
+          <div class="fg" style="margin:0"><div class="fl">Data scadenza</div>
+            <input class="fi" id="sc-data-${i}" type="date" value="${s.data_scadenza||''}"/></div>
+        </div>
+        <div class="fg" style="margin-bottom:6px"><div class="fl">Email alert (separate da virgola)</div>
+          <input class="fi" id="sc-email-${i}" value="${esc(s.emails||'')}" placeholder="es. mario@esempio.it"/></div>
+        <div class="fr" style="margin-bottom:0">
+          <div class="fg" style="margin:0"><div class="fl">Giorni prima per alert</div>
+            <input class="fi" id="sc-giorni-${i}" value="${esc(s.giorni_prima||'1,7,30,60')}"/></div>
+          <div class="fg" style="margin:0;display:flex;align-items:flex-end">
+            <button class="btn bd bsm" data-del-sc="${i}" style="margin-bottom:2px">🗑 Rimuovi</button>
+          </div>
+        </div>
+      </div>`).join('')+
+      `<button class="btn bpg bsm" id="sc-add-btn">+ Aggiungi scadenza</button>`;
+  }
+
+  const body=`
+    <div class="fg"><div class="fl">Nome impianto *</div><input class="fi" id="imp-nome" value="${esc(imp?.nome||'')}"/></div>
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="imp-note" style="min-height:50px">${esc(imp?.note||'')}</textarea></div>
+    <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
+      <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:10px">📅 Scadenze</div>
+      <div id="sc-list">${buildScadenzeHTML()}</div>
+    </div>`;
+
+  openM(imp?'✏ Modifica impianto':'+ Nuovo impianto',body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const nome=$('imp-nome').value.trim();
+      if(!nome){toast('Il nome è obbligatorio','err');return;}
+      // Raccogli scadenze dal DOM
+      const scadEntriesNew=scadenze.map((_,i)=>({
+        nome:$(`sc-nome-${i}`)?.value.trim()||'',
+        data_scadenza:$(`sc-data-${i}`)?.value||null,
+        emails:$(`sc-email-${i}`)?.value.trim()||null,
+        giorni_prima:$(`sc-giorni-${i}`)?.value.trim()||'1,7,30,60',
+      })).filter(s=>s.nome);
+      try{
+        let impId=imp?.id;
+        if(imp){
+          await db('PATCH',T('impianti'),{flt:`id=eq.${imp.id}`,body:{nome,note:$('imp-note').value.trim()||null}});
+          S.impianti=S.impianti.map(x=>x.id===imp.id?{...x,nome,note:$('imp-note').value.trim()||null}:x);
+          // Cancella scadenze vecchie e reinserisci
+          await db('DELETE',T('impianti_scadenze'),{flt:`impianto_id=eq.${imp.id}`});
+          S.impiantiScadenze=S.impiantiScadenze.filter(x=>x.impianto_id!==imp.id);
+        }else{
+          const [ni]=await db('POST',T('impianti'),{body:{nome,note:$('imp-note').value.trim()||null}});
+          S.impianti.push(ni); impId=ni.id;
+        }
+        for(const s of scadEntriesNew){
+          const [ns]=await db('POST',T('impianti_scadenze'),{body:{impianto_id:impId,...s}});
+          S.impiantiScadenze.push(ns);
+        }
+        closeM(); renderPage(); toast(imp?'Impianto aggiornato':'Impianto aggiunto ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
+
+  // Bind dinamico bottoni scadenze
+  function bindScadenze(){
+    $('sc-add-btn')?.addEventListener('click',()=>{
+      scadenze.push({nome:'',data_scadenza:'',emails:'',giorni_prima:'1,7,30,60'});
+      $('sc-list').innerHTML=buildScadenzeHTML();
+      bindScadenze();
+    });
+    document.querySelectorAll('[data-del-sc]').forEach(b=>{
+      b.addEventListener('click',()=>{
+        const i=parseInt(b.dataset.delSc);
+        // salva stato attuale prima di rimuovere
+        scadenze=scadenze.map((_,j)=>({
+          nome:$(`sc-nome-${j}`)?.value.trim()||'',
+          data_scadenza:$(`sc-data-${j}`)?.value||null,
+          emails:$(`sc-email-${j}`)?.value.trim()||null,
+          giorni_prima:$(`sc-giorni-${j}`)?.value.trim()||'1,7,30,60',
+        }));
+        scadenze.splice(i,1);
+        $('sc-list').innerHTML=buildScadenzeHTML();
+        bindScadenze();
+      });
+    });
+  }
+  setTimeout(bindScadenze,50);
 }
 
 function renderFornitori(pb){
@@ -2664,7 +2852,7 @@ function renderUtentiTable(list,pb){
     <td><span class="bg ${rc}">${rl}</span></td>
     <td><span class="bg ${u.attivo?'bg-on':'bg-off'}">${u.attivo?'&#9679; Attivo':'&#9675; Inattivo'}</span></td>
     <td><div class="tda">
-      <button class="btn bs bsm" data-ue="${u.id}">✏ Modifica</button>
+      <button class="btn bs bsm" data-ue="${u.id}">&#9998; Modifica</button>
       ${u.id!==S.user?.id?`<button class="btn bd bsm" data-ud="${u.id}">&#128465; Rimuovi</button>`:''}
     </div></td>
   </tr>`;}).join('')}
@@ -2725,7 +2913,7 @@ function openUtenteModal(u){
     ${!isNew?`<div class="fg"><div class="fl">Nuova password <span style="font-weight:400;font-size:11px;color:var(--g500)">(lascia vuoto per non modificare)</span></div>
       <input class="fi" id="um-newpwd" type="password" placeholder="Minimo 6 caratteri"/>
       <div id="um-pwd-warn" style="display:none">${PWD_WARN_HTML}</div></div>`:''}`;
-  openM(isNew?'+ Nuovo utente':'✏ Modifica utente',body,[
+  openM(isNew?'+ Nuovo utente':'&#9998; Modifica utente',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=document.getElementById('um-nome').value.trim();
