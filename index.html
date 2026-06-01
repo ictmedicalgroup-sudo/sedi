@@ -280,7 +280,7 @@ const T = n => `sedi_${n}`;
    STATO
 ══════════════════════════════════════════ */
 const S = {
-  user: null, token: null,
+  user: null, token: null, refreshToken: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
   verifiche: [], convenzioni: [], alertCfg: [],
@@ -382,7 +382,7 @@ document.addEventListener('DOMContentLoaded',async ()=>{
 /* ══════════════════════════════════════════
    SUPABASE REST
 ══════════════════════════════════════════ */
-async function db(method,table,opts={}){
+async function db(method,table,opts={},_retry=false){
   const {flt='',body=null,sel='*',ord='',lim=''}=opts;
   let url=`${CFG.URL}/rest/v1/${table}?select=${sel}`;
   if(flt) url+=`&${flt}`;
@@ -400,6 +400,15 @@ async function supaLogin(email,password){
   const data=await res.json();
   if(!res.ok) throw new Error(data.error_description||data.message||'Credenziali non valide');
   return data;
+}
+async function supaRefreshToken(){
+  if(!S.refreshToken) throw new Error('Nessun refresh token');
+  const res=await fetch(`${CFG.URL}/auth/v1/token?grant_type=refresh_token`,{method:'POST',
+    headers:{'apikey':CFG.KEY,'Content-Type':'application/json'},
+    body:JSON.stringify({refresh_token:S.refreshToken})});
+  const data=await res.json();
+  if(!res.ok) throw new Error('Sessione scaduta');
+  S.token=data.access_token; S.refreshToken=data.refresh_token;
 }
 async function supaLogout(){
   try{await fetch(`${CFG.URL}/auth/v1/logout`,{method:'POST',headers:{'apikey':CFG.KEY,'Authorization':`Bearer ${S.token}`}});}catch(e){}
@@ -2655,7 +2664,7 @@ function renderUtentiTable(list,pb){
     <td><span class="bg ${rc}">${rl}</span></td>
     <td><span class="bg ${u.attivo?'bg-on':'bg-off'}">${u.attivo?'&#9679; Attivo':'&#9675; Inattivo'}</span></td>
     <td><div class="tda">
-      <button class="btn bs bsm" data-ue="${u.id}">&#9998; Modifica</button>
+      <button class="btn bs bsm" data-ue="${u.id}">✏ Modifica</button>
       ${u.id!==S.user?.id?`<button class="btn bd bsm" data-ud="${u.id}">&#128465; Rimuovi</button>`:''}
     </div></td>
   </tr>`;}).join('')}
@@ -2716,7 +2725,7 @@ function openUtenteModal(u){
     ${!isNew?`<div class="fg"><div class="fl">Nuova password <span style="font-weight:400;font-size:11px;color:var(--g500)">(lascia vuoto per non modificare)</span></div>
       <input class="fi" id="um-newpwd" type="password" placeholder="Minimo 6 caratteri"/>
       <div id="um-pwd-warn" style="display:none">${PWD_WARN_HTML}</div></div>`:''}`;
-  openM(isNew?'+ Nuovo utente':'&#9998; Modifica utente',body,[
+  openM(isNew?'+ Nuovo utente':'✏ Modifica utente',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=document.getElementById('um-nome').value.trim();
@@ -2879,7 +2888,7 @@ async function doLogin(){
 }
 async function doLogout(){
   await supaLogout();
-  S.user=null;S.token=null;
+  S.user=null;S.token=null;S.refreshToken=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
 }
 $('lbtn').addEventListener('click',doLogin);
