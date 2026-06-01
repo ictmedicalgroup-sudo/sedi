@@ -2015,6 +2015,7 @@ function renderImpianti(pb){
   lista.sort((a,b)=>{
     if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
     if(f.sort==='nome') return (a.nome||'').localeCompare(b.nome||'');
+    if(f.sort==='sede') return (S.sedi.find(s=>s.id===a.sede_id)?.nome||'').localeCompare(S.sedi.find(s=>s.id===b.sede_id)?.nome||'');
     return 0;
   });
 
@@ -2032,6 +2033,7 @@ function renderImpianti(pb){
       ?`<div class="emp"><div class="emi">🏗</div><div class="emt">${S.impianti.length?'Nessun risultato':'Nessun impianto'}</div></div>`
       :`<table class="dt"><thead><tr>
           ${thSort('nome','Impianto')}
+          ${thSort('sede','Sede')}
           <th>Prossima scadenza</th>
           ${thSort('giorni','Scade tra')}
           <th>Scadenze</th>
@@ -2041,6 +2043,7 @@ function renderImpianti(pb){
         const style=imp._giorni!==null?scadenzaStyle(imp._giorni,imp._alertGiorni):'';
         return `<tr style="${style}">
           <td><div class="tn">${esc(imp.nome)}</div>${imp.note?`<div class="ts">${esc(imp.note)}</div>`:''}</td>
+          <td>${imp.sede_id?`<span style="font-size:12px;color:var(--g700)">${esc(S.sedi.find(s=>s.id===imp.sede_id)?.nome||'—')}</span>`:'—'}</td>
           <td>${imp._prossima?`<span style="font-size:12px">${esc(imp._prossima.nome||'')} — ${fmtDate(imp._prossima.data_scadenza)}</span>`:'—'}</td>
           <td>${imp._giorni!==null?scadenzaBadge(imp._giorni):'—'}</td>
           <td><span class="bg bg-usr">${imp._scadenze.length} scadenz${imp._scadenze.length===1?'a':'e'}</span></td>
@@ -2071,12 +2074,16 @@ function renderImpianti(pb){
 }
 
 async function openImpiantoModal(imp){
-  // Carica scadenze esistenti
+  // Ricarica scadenze fresche dal DB se impianto esistente
+  if(imp){
+    const fresh=await db('GET',T('impianti_scadenze'),{flt:`impianto_id=eq.${imp.id}`,ord:'data_scadenza.asc'})||[];
+    S.impiantiScadenze=[...S.impiantiScadenze.filter(s=>s.impianto_id!==imp.id),...fresh];
+  }
   let scadenze=imp?[...S.impiantiScadenze.filter(s=>s.impianto_id===imp.id)]:[];
 
   function buildScadenzeHTML(){
-    return scadenze.map((s,i)=>`
-      <div class="str-campo" style="background:var(--g50);border-radius:var(--rsm);padding:10px;margin-bottom:8px;display:block" id="sc-block-${i}">
+    return (scadenze.length?scadenze.map((s,i)=>`
+      <div style="background:var(--g50);border-radius:var(--rsm);padding:10px;margin-bottom:8px">
         <div class="fr" style="margin-bottom:8px">
           <div class="fg" style="margin:0"><div class="fl">Nome scadenza *</div>
             <input class="fi" id="sc-nome-${i}" value="${esc(s.nome||'')}"/></div>
@@ -2085,19 +2092,26 @@ async function openImpiantoModal(imp){
         </div>
         <div class="fg" style="margin-bottom:6px"><div class="fl">Email alert (separate da virgola)</div>
           <input class="fi" id="sc-email-${i}" value="${esc(s.emails||'')}" placeholder="es. mario@esempio.it"/></div>
-        <div class="fr" style="margin-bottom:0">
+        <div class="fr" style="margin-bottom:4px">
           <div class="fg" style="margin:0"><div class="fl">Giorni prima per alert</div>
             <input class="fi" id="sc-giorni-${i}" value="${esc(s.giorni_prima||'1,7,30,60')}"/></div>
-          <div class="fg" style="margin:0;display:flex;align-items:flex-end">
-            <button class="btn bd bsm" data-del-sc="${i}" style="margin-bottom:2px">🗑 Rimuovi</button>
+          <div class="fg" style="margin:0;display:flex;align-items:flex-end;gap:6px">
+            ${s.id?`<button class="btn bs bsm" data-test-sc="${s.id}" style="margin-bottom:2px">🧪 TEST</button>`:''}
+            <button class="btn bd bsm" data-del-sc="${i}" style="margin-bottom:2px">🗑</button>
           </div>
         </div>
-      </div>`).join('')+
-      `<button class="btn bpg bsm" id="sc-add-btn">+ Aggiungi scadenza</button>`;
+        <div id="sc-test-result-${i}" style="font-size:12px;color:var(--g500);margin-top:4px"></div>
+      </div>`).join(''):'')
+    +`<button class="btn bpg bsm" id="sc-add-btn" style="margin-top:4px">+ Aggiungi scadenza</button>`;
   }
 
   const body=`
     <div class="fg"><div class="fl">Nome impianto *</div><input class="fi" id="imp-nome" value="${esc(imp?.nome||'')}"/></div>
+    <div class="fg"><div class="fl">Sede</div>
+      <select class="fse" id="imp-sede">
+        <option value="">— Nessuna sede —</option>
+        ${sediOrdinate().map(s=>`<option value="${s.id}"${imp?.sede_id===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}
+      </select></div>
     <div class="fg"><div class="fl">Note</div><textarea class="fta" id="imp-note" style="min-height:50px">${esc(imp?.note||'')}</textarea></div>
     <div style="border-top:1px solid var(--g200);margin-top:12px;padding-top:12px">
       <div style="font-size:12px;font-weight:700;color:var(--g700);margin-bottom:10px">📅 Scadenze</div>
@@ -2109,23 +2123,24 @@ async function openImpiantoModal(imp){
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=$('imp-nome').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
-      // Raccogli scadenze dal DOM
+      // Leggi stato attuale dal DOM
       const scadEntriesNew=scadenze.map((_,i)=>({
         nome:$(`sc-nome-${i}`)?.value.trim()||'',
         data_scadenza:$(`sc-data-${i}`)?.value||null,
         emails:$(`sc-email-${i}`)?.value.trim()||null,
         giorni_prima:$(`sc-giorni-${i}`)?.value.trim()||'1,7,30,60',
       })).filter(s=>s.nome);
+      const sedeId=$('imp-sede').value||null;
+      const noteVal=$('imp-note').value.trim()||null;
       try{
         let impId=imp?.id;
         if(imp){
-          await db('PATCH',T('impianti'),{flt:`id=eq.${imp.id}`,body:{nome,note:$('imp-note').value.trim()||null}});
-          S.impianti=S.impianti.map(x=>x.id===imp.id?{...x,nome,note:$('imp-note').value.trim()||null}:x);
-          // Cancella scadenze vecchie e reinserisci
+          await db('PATCH',T('impianti'),{flt:`id=eq.${imp.id}`,body:{nome,sede_id:sedeId,note:noteVal}});
+          S.impianti=S.impianti.map(x=>x.id===imp.id?{...x,nome,sede_id:sedeId,note:noteVal}:x);
           await db('DELETE',T('impianti_scadenze'),{flt:`impianto_id=eq.${imp.id}`});
           S.impiantiScadenze=S.impiantiScadenze.filter(x=>x.impianto_id!==imp.id);
         }else{
-          const [ni]=await db('POST',T('impianti'),{body:{nome,note:$('imp-note').value.trim()||null}});
+          const [ni]=await db('POST',T('impianti'),{body:{nome,sede_id:sedeId,note:noteVal}});
           S.impianti.push(ni); impId=ni.id;
         }
         for(const s of scadEntriesNew){
@@ -2137,9 +2152,16 @@ async function openImpiantoModal(imp){
     }},
   ]);
 
-  // Bind dinamico bottoni scadenze
   function bindScadenze(){
     $('sc-add-btn')?.addEventListener('click',()=>{
+      // Salva stato DOM corrente
+      scadenze=scadenze.map((_,j)=>({
+        ...scadenze[j],
+        nome:$(`sc-nome-${j}`)?.value.trim()||'',
+        data_scadenza:$(`sc-data-${j}`)?.value||null,
+        emails:$(`sc-email-${j}`)?.value.trim()||null,
+        giorni_prima:$(`sc-giorni-${j}`)?.value.trim()||'1,7,30,60',
+      }));
       scadenze.push({nome:'',data_scadenza:'',emails:'',giorni_prima:'1,7,30,60'});
       $('sc-list').innerHTML=buildScadenzeHTML();
       bindScadenze();
@@ -2147,8 +2169,8 @@ async function openImpiantoModal(imp){
     document.querySelectorAll('[data-del-sc]').forEach(b=>{
       b.addEventListener('click',()=>{
         const i=parseInt(b.dataset.delSc);
-        // salva stato attuale prima di rimuovere
         scadenze=scadenze.map((_,j)=>({
+          ...scadenze[j],
           nome:$(`sc-nome-${j}`)?.value.trim()||'',
           data_scadenza:$(`sc-data-${j}`)?.value||null,
           emails:$(`sc-email-${j}`)?.value.trim()||null,
@@ -2157,6 +2179,23 @@ async function openImpiantoModal(imp){
         scadenze.splice(i,1);
         $('sc-list').innerHTML=buildScadenzeHTML();
         bindScadenze();
+      });
+    });
+    // TEST buttons per scadenze già salvate
+    document.querySelectorAll('[data-test-sc]').forEach((b,bi)=>{
+      b.addEventListener('click',async()=>{
+        const scId=b.dataset.testSc;
+        const resEl=document.getElementById(`sc-test-result-${bi}`);
+        if(resEl) resEl.textContent='Invio in corso…';
+        try{
+          const resp=await fetch(`${CFG.FN}/sedi-alert-impianti`,{
+            method:'POST',
+            headers:{'Content-Type':'application/json','Authorization':`Bearer ${S.token}`},
+            body:JSON.stringify({test:true,scadenza_id:scId})
+          });
+          const data=await resp.json();
+          if(resEl) resEl.textContent=data.ok?'✅ Email inviata!':'⚠ '+JSON.stringify(data);
+        }catch(e){if(resEl) resEl.textContent='❌ '+(e instanceof Error?e.message:String(e));}
       });
     });
   }
