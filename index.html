@@ -3118,6 +3118,8 @@ async function doLogout(){
   await supaLogout();
   S.user=null;S.token=null;S.refreshToken=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
+  const btn=$('lbtn'); if(btn){btn.innerHTML='Accedi';btn.disabled=false;}
+  const err=$('lerr'); if(err){err.style.display='none';}
 }
 $('lbtn').addEventListener('click',doLogin);
 $('lem').addEventListener('keydown',e=>{if(e.key==='Enter')$('lpw').focus();});
