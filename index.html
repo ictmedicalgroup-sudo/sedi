@@ -222,6 +222,7 @@ body{background:var(--g50);color:var(--g900);min-height:100vh;font-size:14px}
 input:checked+.tsl{background:var(--verde)}
 input:checked+.tsl::after{transform:translateX(16px)}
 </style>
+<script src="https://cdn.sheetjs.com/xlsx-0.20.2/package/dist/xlsx.full.min.js"></script>
 </head>
 <body>
 <div id="toast"></div>
@@ -518,6 +519,102 @@ function goPage(pg){
   if(S._loginAt&&(Date.now()-S._loginAt)>36000000){doLogout('Sessione scaduta dopo 10 ore. Accedi di nuovo.');return;}
   S.page=pg; renderSidebar(); renderPage();
 }
+/* ══════════════════════════════════════════
+   EXPORT EXCEL
+══════════════════════════════════════════ */
+function exportXlsx(rows, filename){
+  const ws=XLSX.utils.json_to_sheet(rows);
+  const wb=XLSX.utils.book_new();
+  XLSX.utils.book_append_sheet(wb,ws,'Dati');
+  XLSX.writeFile(wb,filename);
+}
+
+function exportAsset(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const rows=S.asset.map(a=>{
+    const sc=S.assetSubcat.find(x=>x.id===a.sottocategoria_id);
+    const cat=S.assetCat.find(x=>x.id===sc?.categoria_id);
+    const ub=S.assetSedi.filter(x=>x.asset_id===a.id&&x.data_da<=oggi&&(!x.data_a||x.data_a>=oggi)).sort((x,y)=>y.data_da.localeCompare(x.data_da))[0];
+    const sede=ub?S.sedi.find(s=>s.id===ub.sede_id):null;
+    return {
+      'Codice':a.codice||'',
+      'Nome':a.nome||'',
+      'Marca':a.marca||'',
+      'Seriale':a.seriale||'',
+      'Anno':a.anno||'',
+      'Collaudo':a.collaudo||'',
+      'Categoria':cat?.nome||'',
+      'Sottocategoria':sc?.nome||'',
+      'Sede attuale':sede?.nome||'',
+      'Sala':ub?.sala||'',
+      'Note':a.note||'',
+    };
+  });
+  exportXlsx(rows,`asset_${oggi}.xlsx`);
+}
+
+function exportVerifiche(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const rows=S.verifiche.map(v=>{
+    const a=S.asset.find(x=>x.id===v.asset_id);
+    const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
+    const giorni=giorniAllaScadenza(scad);
+    const ub=S.assetSedi.filter(x=>x.asset_id===v.asset_id&&x.data_da<=oggi&&(!x.data_a||x.data_a>=oggi)).sort((x,y)=>y.data_da.localeCompare(x.data_da))[0];
+    const sede=ub?S.sedi.find(s=>s.id===ub.sede_id):null;
+    return {
+      'Asset':a?.nome||'',
+      'Codice':a?.codice||'',
+      'Seriale':a?.seriale||'',
+      'Sede':sede?.nome||'',
+      'Ente verificatore':v.ente_verificatore||'',
+      'Ultima verifica':v.ultima_verifica||'',
+      'Periodicità':v.periodicita||'',
+      'Prossima scadenza':scad?scad.toISOString().slice(0,10):'',
+      'Giorni alla scadenza':giorni??'',
+      'Alert (gg)':v.alert_giorni||'',
+      'Note':v.note||'',
+    };
+  });
+  exportXlsx(rows,`verifiche_${oggi}.xlsx`);
+}
+
+function exportConvenzioni(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const rows=S.convenzioni.map(con=>{
+    const scad=con.scadenza?new Date(con.scadenza+'T00:00:00'):null;
+    const giorni=giorniAllaScadenza(scad);
+    const sede=S.sedi.find(s=>s.id===con.sede_id);
+    return {
+      'Nome':con.nome||'',
+      'Sede':sede?.nome||'',
+      'Data stipula':con.data_stipula||'',
+      'Scadenza':con.scadenza||'',
+      'Giorni alla scadenza':giorni??'',
+      'Alert (gg)':con.alert_giorni||'',
+      'Note':con.note||'',
+    };
+  });
+  exportXlsx(rows,`convenzioni_${oggi}.xlsx`);
+}
+
+function exportImpianti(){
+  const oggi=new Date().toISOString().slice(0,10);
+  const rows=[];
+  S.impianti.forEach(imp=>{
+    const sede=S.sedi.find(s=>s.id===imp.sede_id);
+    const scadenze=S.impiantiScadenze.filter(s=>s.impianto_id===imp.id);
+    if(!scadenze.length){
+      rows.push({'Impianto':imp.nome,'Sede':sede?.nome||'','Note':imp.note||'','Scadenza':'','Data scadenza':'','Giorni alla scadenza':'','Email alert':'','Giorni prima':''});
+    } else {
+      scadenze.forEach(sc=>{
+        const giorni=sc.data_scadenza?giorniAllaScadenza(new Date(sc.data_scadenza+'T00:00:00')):null;
+        rows.push({'Impianto':imp.nome,'Sede':sede?.nome||'','Note':imp.note||'','Scadenza':sc.nome||'','Data scadenza':sc.data_scadenza||'','Giorni alla scadenza':giorni??'','Email alert':sc.emails||'','Giorni prima':sc.giorni_prima||''});
+      });
+    }
+  });
+  exportXlsx(rows,`impianti_${oggi}.xlsx`);
+}
+
 function renderPage(){
   const pb=$('pb');
   pb.innerHTML=`<div style="padding:50px;text-align:center"><span class="spn" style="width:28px;height:28px"></span></div>`;
@@ -1148,6 +1245,7 @@ function renderAsset(pb){
           ].join('');
         })()}
       </select>
+      <button class="btn bs bsm" id="a-export">⬇ Excel</button>
       <button class="btn bpg bsm" id="a-add">+ Nuovo asset</button>
     </div>
     <div class="card" id="asset-table-wrap">
@@ -1174,6 +1272,7 @@ function renderAsset(pb){
   $('af-sub').addEventListener('change',e=>{f.subcatId=e.target.value;renderPage();});
   $('af-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderAssetTable();});
   $('a-add').addEventListener('click',()=>openAssetModal(null));
+  $('a-export').addEventListener('click',exportAsset);
   bindAssetTableEvents();
 }
 
@@ -1767,6 +1866,7 @@ function renderVerifiche(pb){
           })()}
         </select>
       </div>
+      <button class="btn bs bsm" id="v-export">⬇ Excel</button>
       ${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}
     </div>
     <div id="vf-table-wrap"></div>
@@ -1775,6 +1875,7 @@ function renderVerifiche(pb){
   renderVerifTable();
   $('vf-search').addEventListener('input',e=>{f.search=e.target.value;renderVerifTable();});
   $('vf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderVerifTable();});
+  $('v-export').addEventListener('click',exportVerifiche);
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderVerifTable();}));
   if(isAdm){
     $('v-add')?.addEventListener('click',()=>openVerificaModal(null));
@@ -1969,6 +2070,7 @@ function renderConvenzioni(pb){
         <span class="ct">Convenzioni (${lista.length}/${S.convenzioni.length})</span>
         <input class="fi-sm" id="conf-search" placeholder="🔍 Cerca..." value="${esc(f.search)}" style="width:200px"/>
       </div>
+      <button class="btn bs bsm" id="con-export">⬇ Excel</button>
       ${isAdm?`<button class="btn bpg bsm" id="con-add">+ Nuova convenzione</button>`:''}
     </div>
     ${!lista.length
@@ -2104,6 +2206,7 @@ function renderImpianti(pb){
           })()}
         </select>
       </div>
+      <button class="btn bs bsm" id="imp-export">⬇ Excel</button>
       ${isAdm?`<button class="btn bpg bsm" id="imp-add">+ Nuovo impianto</button>`:''}
     </div>
     ${!lista.length
@@ -2135,6 +2238,7 @@ function renderImpianti(pb){
 
   $('impf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
   $('impf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
+  $('imp-export').addEventListener('click',exportImpianti);
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('imp-add')?.addEventListener('click',()=>openImpiantoModal(null));
