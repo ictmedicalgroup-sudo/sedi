@@ -2096,6 +2096,7 @@ function renderConvenzioni(pb){
   </div></div>`;
 
   $('conf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  $('con-export')?.addEventListener('click',exportConvenzioni);
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('con-add')?.addEventListener('click',()=>openConvenzioneModal(null));
