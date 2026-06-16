@@ -513,6 +513,9 @@ function renderSidebar(){
   $('tb-role').innerHTML=S.user?`<span class="bg ${rb[ruolo]||'bg-usr'}">${rl[ruolo]||ruolo}</span>`:'';
 }
 function goPage(pg){
+  $('admin-dd')?.classList.add('hid');
+  if(!S.token){doLogout('Sessione scaduta. Accedi di nuovo.');return;}
+  if(S._loginAt&&(Date.now()-S._loginAt)>36000000){doLogout('Sessione scaduta dopo 10 ore. Accedi di nuovo.');return;}
   S.page=pg; renderSidebar(); renderPage();
 }
 function renderPage(){
@@ -3174,7 +3177,8 @@ async function doLogin(){
   btn.innerHTML='<span class="spn"></span> Accesso…'; btn.disabled=true;
   try{
     const auth=await supaLogin(email,pwd);
-    S.token=auth.access_token;
+    S.token=auth.access_token; S.refreshToken=auth.refresh_token;
+    S._loginAt=Date.now();
     const [profilo]=await db('GET',T('profili'),{flt:`id=eq.${auth.user.id}`});
     if(!profilo) throw new Error('Profilo non trovato. Contatta l\'amministratore.');
     if(profilo.attivo===false) throw new Error('Utente disabilitato. Contatta l\'amministratore.');
