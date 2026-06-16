@@ -1758,6 +1758,7 @@ function renderVerifiche(pb){
       ?`<div class="emp"><div class="emi">✅</div><div class="emt">${S.verifiche.length?'Nessun risultato':'Nessuna verifica'}</div></div>`
       :`<table class="dt"><thead><tr>
           ${thSort('asset','Asset')}
+          <th>Seriale</th>
           ${thSort('sede','Sede')}
           <th>Ente verificatore</th>
           ${thSort('ultima','Ultima verifica')}
@@ -1770,6 +1771,7 @@ function renderVerifiche(pb){
         const style=scadenzaStyle(v._giorni,v.alert_giorni||60);
         return `<tr style="${style}">
           <td><div class="tn">${esc(v._asset?.nome||'—')}</div><div class="ts">${esc(v._asset?.codice||'')}</div></td>
+          <td style="font-size:12px;font-family:monospace;color:var(--g500)">${esc(v._asset?.seriale||'—')}</td>
           <td>${v._sede?`<span class="bg bg-on" style="font-size:11px">${esc(v._sede.nome)}</span>`:'<span style="color:var(--g400)">—</span>'}</td>
           <td>${esc(v.ente_verificatore||'—')}</td>
           <td>${fmtDate(v.ultima_verifica)}</td>
