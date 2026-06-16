@@ -403,7 +403,7 @@ async function db(method,table,opts={},_retry=false){
   const res=await fetch(url,{method,headers,body:body?JSON.stringify(body):undefined});
   if(res.status===401&&!_retry&&S.refreshToken){
     try{await supaRefreshToken();return db(method,table,opts,true);}
-    catch(e){doLogout();throw new Error('Sessione scaduta, effettua nuovamente il login');}
+    catch(e){doLogout('Sessione scaduta. Accedi di nuovo.');return null;}
   }
   if(!res.ok){const e=await res.text();throw new Error(`${method} ${table}: ${e}`);}
   return method==='DELETE'?null:res.json();
@@ -1715,7 +1715,7 @@ async function sendTestAlert(tipo, refId){
 
 function renderVerifiche(pb){
   const isAdm=S.user?.ruolo==='admin';
-  if(!S.vf) S.vf={search:'',sort:'giorni',sedeId:''}; // stato filtri verifiche
+  if(!S.vf) S.vf={search:'',sort:'giorni'}; // stato filtri verifiche
   const f=S.vf;
 
   const oggi=new Date(); oggi.setHours(0,0,0,0);
@@ -1733,9 +1733,6 @@ function renderVerifiche(pb){
     return (v._asset?.nome||'').toLowerCase().includes(q)||
            (v._asset?.codice||'').toLowerCase().includes(q)||
            (v.ente_verificatore||'').toLowerCase().includes(q);
-  }).filter(v=>{
-    if(!f.sedeId) return true;
-    return v._sede?.id===f.sedeId;
   });
 
   // ordinamento
@@ -1752,7 +1749,7 @@ function renderVerifiche(pb){
   pb.innerHTML=`<div class="fian"><div class="card">
     <div class="ch">
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
-        <span class="ct">Verifiche (${lista.length}/${S.verifiche.length})</span>
+        <span class="ct">Verifiche (${S.verifiche.length})</span>
         <input class="fi-sm" id="vf-search" placeholder="🔍 Cerca asset, ente..." value="${esc(f.search)}" style="width:220px"/>
         <select class="fi-sm" id="vf-sede">
           <option value="">Tutte le sedi</option>
@@ -1769,42 +1766,13 @@ function renderVerifiche(pb){
       </div>
       ${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}
     </div>
-    ${!lista.length
-      ?`<div class="emp"><div class="emi">✅</div><div class="emt">${S.verifiche.length?'Nessun risultato':'Nessuna verifica'}</div></div>`
-      :`<table class="dt"><thead><tr>
-          ${thSort('asset','Asset')}
-          <th>Seriale</th>
-          ${thSort('sede','Sede')}
-          <th>Ente verificatore</th>
-          ${thSort('ultima','Ultima verifica')}
-          <th>Periodicità</th>
-          <th>Prossima scadenza</th>
-          ${thSort('giorni','Scade tra')}
-          ${isAdm?'<th>Azioni</th>':''}
-        </tr></thead><tbody>
-      ${lista.map(v=>{
-        const style=scadenzaStyle(v._giorni,v.alert_giorni||60);
-        return `<tr style="${style}">
-          <td><div class="tn">${esc(v._asset?.nome||'—')}</div><div class="ts">${esc(v._asset?.codice||'')}</div></td>
-          <td style="font-size:12px;font-family:monospace;color:var(--g500)">${esc(v._asset?.seriale||'—')}</td>
-          <td>${v._sede?`<span class="bg bg-on" style="font-size:11px">${esc(v._sede.nome)}</span>`:'<span style="color:var(--g400)">—</span>'}</td>
-          <td>${esc(v.ente_verificatore||'—')}</td>
-          <td>${fmtDate(v.ultima_verifica)}</td>
-          <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
-          <td>${v._scad?fmtDate(v._scad.toISOString().slice(0,10)):'—'}</td>
-          <td>${scadenzaBadge(v._giorni)}</td>
-          ${isAdm?`<td><div class="tda">
-            <button class="btn bs bsm" data-ve="${v.id}">✏</button>
-            <button class="btn bd bsm" data-vd="${v.id}">🗑</button>
-          </div></td>`:''}
-        </tr>`;
-      }).join('')}
-      </tbody></table>`}
+    <div id="vf-table-wrap"></div>
   </div></div>`;
 
-  $('vf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
-  $('vf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
-  pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
+  renderVerifTable();
+  $('vf-search').addEventListener('input',e=>{f.search=e.target.value;renderVerifTable();});
+  $('vf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderVerifTable();});
+  pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderVerifTable();}));
   if(isAdm){
     $('v-add')?.addEventListener('click',()=>openVerificaModal(null));
     pb.querySelectorAll('[data-ve]').forEach(b=>b.addEventListener('click',()=>openVerificaModal(S.verifiche.find(x=>x.id===b.dataset.ve))));
@@ -1812,9 +1780,82 @@ function renderVerifiche(pb){
       const v=S.verifiche.find(x=>x.id===b.dataset.vd);
       openConf(`Eliminare la verifica per "${S.asset.find(a=>a.id===v?.asset_id)?.nome||'?'}"?`,async()=>{
         await db('DELETE',T('verifiche'),{flt:`id=eq.${b.dataset.vd}`});
-        S.verifiche=S.verifiche.filter(x=>x.id!==b.dataset.vd); renderPage(); toast('Verifica eliminata');
+        S.verifiche=S.verifiche.filter(x=>x.id!==b.dataset.vd); renderVerifTable(); toast('Verifica eliminata');
       });
     }));
+  }
+}
+
+function renderVerifTable(){
+  const f=S.vf||{};
+  const isAdm=S.user?.ruolo==='admin';
+  const thSort=(col,lbl)=>`<th style="cursor:pointer;user-select:none" data-vsort="${col}">${lbl}${f.sort===col?' ↑':''}</th>`;
+  const oggi=new Date().toISOString().slice(0,10);
+
+  let lista=S.verifiche.map(v=>{
+    const a=S.asset.find(x=>x.id===v.asset_id);
+    const scad=calcolaScadenza(v.ultima_verifica,v.periodicita);
+    const giorni=giorniAllaScadenza(scad);
+    const ub=S.assetSedi.filter(x=>x.asset_id===v.asset_id&&x.data_da<=oggi&&(!x.data_a||x.data_a>=oggi)).sort((a,b)=>b.data_da.localeCompare(a.data_da))[0];
+    const sede=ub?S.sedi.find(s=>s.id===ub.sede_id):null;
+    return {...v,_asset:a,_scad:scad,_giorni:giorni,_sede:sede};
+  }).filter(v=>{
+    if(f.search){
+      const q=f.search.toLowerCase();
+      if(!((v._asset?.nome||'').toLowerCase().includes(q)||(v._asset?.codice||'').toLowerCase().includes(q)||(v.ente_verificatore||'').toLowerCase().includes(q))) return false;
+    }
+    if(f.sedeId&&v._sede?.id!==f.sedeId) return false;
+    return true;
+  });
+
+  lista.sort((a,b)=>{
+    if(f.sort==='giorni') return (a._giorni??99999)-(b._giorni??99999);
+    if(f.sort==='asset') return (a._asset?.nome||'').localeCompare(b._asset?.nome||'');
+    if(f.sort==='ultima') return (a.ultima_verifica||'').localeCompare(b.ultima_verifica||'');
+    if(f.sort==='sede') return (a._sede?.nome||'').localeCompare(b._sede?.nome||'');
+    return 0;
+  });
+
+  const wrap=$('vf-table-wrap'); if(!wrap) return;
+  wrap.innerHTML=!lista.length
+    ?`<div class="emp"><div class="emi">✅</div><div class="emt">${S.verifiche.length?'Nessun risultato':'Nessuna verifica'}</div></div>`
+    :`<div style="font-size:12px;color:var(--g500);padding:8px 0 4px">${lista.length} / ${S.verifiche.length} verifiche</div>
+    <table class="dt"><thead><tr>
+      ${thSort('asset','Asset')}
+      <th>Seriale</th>
+      ${thSort('sede','Sede')}
+      <th>Ente verificatore</th>
+      ${thSort('ultima','Ultima verifica')}
+      <th>Periodicità</th>
+      <th>Prossima scadenza</th>
+      ${thSort('giorni','Scade tra')}
+      ${isAdm?'<th>Azioni</th>':''}
+    </tr></thead><tbody>
+    ${lista.map(v=>`<tr style="${scadenzaStyle(v._giorni,v.alert_giorni||60)}">
+      <td><div class="tn">${esc(v._asset?.nome||'—')}</div><div class="ts">${esc(v._asset?.codice||'')}</div></td>
+      <td style="font-size:12px;font-family:monospace;color:var(--g500)">${esc(v._asset?.seriale||'—')}</td>
+      <td>${v._sede?`<span class="bg bg-on" style="font-size:11px">${esc(v._sede.nome)}</span>`:'<span style="color:var(--g400)">—</span>'}</td>
+      <td>${esc(v.ente_verificatore||'—')}</td>
+      <td>${fmtDate(v.ultima_verifica)}</td>
+      <td><span class="bg bg-usr">${v.periodicita==='biennale'?'Biennale':'Annuale'}</span></td>
+      <td>${v._scad?fmtDate(v._scad.toISOString().slice(0,10)):'—'}</td>
+      <td>${scadenzaBadge(v._giorni)}</td>
+      ${isAdm?`<td><div class="tda">
+        <button class="btn bs bsm" data-ve="${v.id}">✏</button>
+        <button class="btn bd bsm" data-vd="${v.id}">🗑</button>
+      </div></td>`:''}
+    </tr>`).join('')}
+    </tbody></table>`;
+
+  // Sort listeners
+  wrap.querySelectorAll('[data-vsort]').forEach(th=>th.addEventListener('click',()=>{
+    if(!S.vf) S.vf={};
+    S.vf.sort=th.dataset.vsort; renderVerifTable();
+  }));
+  // Restore search focus
+  const inp=$('vf-search');
+  if(inp&&document.activeElement===inp){
+    const v2=inp.value; inp.focus(); inp.setSelectionRange(v2.length,v2.length);
   }
 }
 
@@ -1869,7 +1910,7 @@ function openVerificaModal(v){
     inp.addEventListener('input',()=>{
       const q=inp.value.toLowerCase().trim();
       if(!q){res.style.display='none';hid.value='';return;}
-      const matches=S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''}`.toLowerCase().includes(q)).slice(0,10);
+      const matches=S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''} ${a.seriale||''}`.toLowerCase().includes(q)).slice(0,10);
       if(!matches.length){res.style.display='none';return;}
       res.innerHTML=matches.map(a=>`<div data-aid="${a.id}" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)"
         onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
@@ -1897,7 +1938,7 @@ function openVerificaModal(v){
 ══════════════════════════════════════════ */
 function renderConvenzioni(pb){
   const isAdm=S.user?.ruolo==='admin';
-  if(!S.conf) S.conf={search:'',sort:'giorni',sedeId:''};
+  if(!S.conf) S.conf={search:'',sort:'giorni'};
   const f=S.conf;
 
   let lista=S.convenzioni.map(con=>{
@@ -1908,9 +1949,6 @@ function renderConvenzioni(pb){
     if(!f.search) return true;
     const q=f.search.toLowerCase();
     return (con.nome||'').toLowerCase().includes(q)||(con.note||'').toLowerCase().includes(q);
-  }).filter(con=>{
-    if(!f.sedeId) return true;
-    return con.sede_id===f.sedeId;
   });
 
   lista.sort((a,b)=>{
@@ -1927,18 +1965,6 @@ function renderConvenzioni(pb){
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="ct">Convenzioni (${lista.length}/${S.convenzioni.length})</span>
         <input class="fi-sm" id="conf-search" placeholder="🔍 Cerca..." value="${esc(f.search)}" style="width:200px"/>
-        <select class="fi-sm" id="conf-sede">
-          <option value="">Tutte le sedi</option>
-          ${(()=>{
-            const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
-            const perArea={};
-            sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
-            return [
-              ...areeOrd.filter(a=>perArea[a.id]).map(a=>`<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`),
-              ...(perArea['__']?[`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`]:[])
-            ].join('');
-          })()}
-        </select>
       </div>
       ${isAdm?`<button class="btn bpg bsm" id="con-add">+ Nuova convenzione</button>`:''}
     </div>
@@ -1965,7 +1991,6 @@ function renderConvenzioni(pb){
   </div></div>`;
 
   $('conf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
-  $('conf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('con-add')?.addEventListener('click',()=>openConvenzioneModal(null));
@@ -2028,7 +2053,7 @@ function openConvenzioneModal(con){
 ══════════════════════════════════════════ */
 function renderImpianti(pb){
   const isAdm=S.user?.ruolo==='admin';
-  if(!S.impf) S.impf={search:'',sort:'giorni'};
+  if(!S.impf) S.impf={search:'',sort:'giorni',sedeId:''};
   const f=S.impf;
 
   // Arricchisci impianti con la scadenza più vicina
@@ -2044,6 +2069,9 @@ function renderImpianti(pb){
     if(!f.search) return true;
     const q=f.search.toLowerCase();
     return (imp.nome||'').toLowerCase().includes(q)||(imp.note||'').toLowerCase().includes(q);
+  }).filter(imp=>{
+    if(!f.sedeId) return true;
+    return imp.sede_id===f.sedeId;
   });
 
   lista.sort((a,b)=>{
@@ -2060,6 +2088,18 @@ function renderImpianti(pb){
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="ct">Impianti (${lista.length}/${S.impianti.length})</span>
         <input class="fi-sm" id="impf-search" placeholder="🔍 Cerca impianto..." value="${esc(f.search)}" style="width:200px"/>
+        <select class="fi-sm" id="impf-sede">
+          <option value="">Tutte le sedi</option>
+          ${(()=>{
+            const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+            const perArea={};
+            sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
+            return [
+              ...areeOrd.filter(a=>perArea[a.id]).map(a=>`<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`),
+              ...(perArea['__']?[`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`]:[])
+            ].join('');
+          })()}
+        </select>
       </div>
       ${isAdm?`<button class="btn bpg bsm" id="imp-add">+ Nuovo impianto</button>`:''}
     </div>
@@ -2091,6 +2131,7 @@ function renderImpianti(pb){
   </div></div>`;
 
   $('impf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  $('impf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('imp-add')?.addEventListener('click',()=>openImpiantoModal(null));
@@ -3054,23 +3095,13 @@ function openUtenteModal(u){
    PAGINA LOG
 ══════════════════════════════════════════ */
 function renderLog(pb){
-  let logPage=0,logQ='',logTipo='';
-  const PAGE=20;
-  const ICONE={
-    'login':'🔑','logout':'🚪','login_failed':'⛔',
-    'sede_create':'📍','utente_create':'👤','ragione_create':'🏛',
-    'keep_alive':'💤',
-  };
-  const icona=(azione)=>ICONE[azione]||'📋';
-
+  let logPage=0,logQ='';
+  const PAGE=15;
   const render=()=>{
     const fl=S.log.filter(l=>{
-      if(logTipo&&l.azione!==logTipo) return false;
       if(!logQ) return true;
       const q=logQ.toLowerCase();
-      const utente=S.profili.find(p=>p.id===l.utente_id);
-      const uNome=utente?`${utente.cognome} ${utente.nome}`:'';
-      return (l.azione||'').toLowerCase().includes(q)||(l.dettaglio||'').toLowerCase().includes(q)||uNome.toLowerCase().includes(q);
+      return (l.azione||'').toLowerCase().includes(q)||(l.dettaglio||'').toLowerCase().includes(q);
     });
     const tot=fl.length,pages=Math.max(1,Math.ceil(tot/PAGE));
     if(logPage>=pages) logPage=pages-1;
@@ -3078,21 +3109,13 @@ function renderLog(pb){
     $('log-count').textContent=`${tot} eventi`;
     $('log-entries').innerHTML=!slice.length
       ?`<div class="emp"><div class="emi">📋</div><div class="emt">Nessun risultato</div></div>`
-      :slice.map(l=>{
-        const utente=S.profili.find(p=>p.id===l.utente_id);
-        const uNome=utente?`${utente.cognome} ${utente.nome}`:l.utente_id?'Utente sconosciuto':'Sistema';
-        return `<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--g100);align-items:flex-start">
-          <div style="width:34px;height:34px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icona(l.azione)}</div>
-          <div style="flex:1;min-width:0">
-            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
-              <span style="font-size:12px;font-weight:700;color:var(--g900)">${esc(uNome)}</span>
-              <span class="bg bg-usr" style="font-size:10px">${esc(l.azione||'—')}</span>
-              <span style="font-size:10.5px;color:var(--g400);font-family:monospace;margin-left:auto">${fmtDt(l.created_at)}</span>
-            </div>
-            ${l.dettaglio&&l.dettaglio!==l.azione?`<div style="font-size:12.5px;color:var(--g500)">${esc(l.dettaglio)}</div>`:''}
+      :slice.map(l=>`<div style="display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--g100);align-items:flex-start">
+          <div style="width:30px;height:30px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📌</div>
+          <div>
+            <div style="font-size:10.5px;color:var(--g500);font-family:monospace;margin-bottom:2px">${fmtDt(l.created_at)}</div>
+            <div style="font-size:13px;color:var(--g700)">${esc(String(l.dettaglio||l.azione||''))}</div>
           </div>
-        </div>`;
-      }).join('');
+        </div>`).join('');
     $('log-pag').innerHTML=pages<=1?'':
       `<div style="display:flex;align-items:center;gap:8px;margin-top:14px;justify-content:center">
         <button class="bic" id="log-prev" ${logPage===0?'disabled style="opacity:.4"':''}>◀</button>
@@ -3102,26 +3125,17 @@ function renderLog(pb){
     $('log-prev')?.addEventListener('click',()=>{logPage--;render();});
     $('log-next')?.addEventListener('click',()=>{logPage++;render();});
   };
-
-  // Tipi di azione disponibili per filtro
-  const tipiAzioni=[...new Set(S.log.map(l=>l.azione).filter(Boolean))].sort();
-
   pb.innerHTML=`<div class="fian"><div class="card">
     <div class="ch"><span class="ct">📋 Log</span>
-      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
+      <div style="display:flex;gap:9px;align-items:center">
         <span id="log-count" style="font-size:12px;color:var(--g500)"></span>
-        <input class="fi-sm" id="log-search" style="width:200px" placeholder="🔍 Cerca utente, azione…"/>
-        <select class="fi-sm" id="log-tipo">
-          <option value="">Tutte le azioni</option>
-          ${tipiAzioni.map(t=>`<option value="${t}">${t}</option>`).join('')}
-        </select>
+        <input class="fi-sm" id="log-search" style="width:220px" placeholder="🔍 Cerca…"/>
       </div>
     </div>
     <div class="cb"><div id="log-entries"></div><div id="log-pag"></div></div>
   </div></div>`;
   render();
   $('log-search').addEventListener('input',e=>{logQ=e.target.value;logPage=0;render();});
-  $('log-tipo').addEventListener('change',e=>{logTipo=e.target.value;logPage=0;render();});
 }
 
 /* ══════════════════════════════════════════
@@ -3168,19 +3182,23 @@ async function doLogin(){
     await loadAll();
     $('lp').classList.add('hid'); $('app').classList.remove('hid');
     renderSidebar(); goPage('griglia');
-    logAct('login',`Accesso effettuato — ${S.user.cognome} ${S.user.nome}`);
+    logAct('login','Accesso effettuato');
     toast(`Benvenuto, ${S.user.nome}! ✅`);
   }catch(e){
     err.textContent=e.message; err.style.display='block';
     btn.innerHTML='Accedi'; btn.disabled=false;
   }
 }
-async function doLogout(){
-  await supaLogout();
+async function doLogout(msg=''){
+  try{await supaLogout();}catch(e){}
   S.user=null;S.token=null;S.refreshToken=null;
   $('app').classList.add('hid'); $('lp').classList.remove('hid'); $('lpw').value='';
   const btn=$('lbtn'); if(btn){btn.innerHTML='Accedi';btn.disabled=false;}
-  const err=$('lerr'); if(err){err.style.display='none';}
+  const err=$('lerr');
+  if(err){
+    if(msg){err.textContent=msg;err.style.display='block';}
+    else err.style.display='none';
+  }
 }
 $('lbtn').addEventListener('click',doLogin);
 $('lem').addEventListener('keydown',e=>{if(e.key==='Enter')$('lpw').focus();});
