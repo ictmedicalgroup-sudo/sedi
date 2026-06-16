@@ -1715,7 +1715,7 @@ async function sendTestAlert(tipo, refId){
 
 function renderVerifiche(pb){
   const isAdm=S.user?.ruolo==='admin';
-  if(!S.vf) S.vf={search:'',sort:'giorni'}; // stato filtri verifiche
+  if(!S.vf) S.vf={search:'',sort:'giorni',sedeId:''}; // stato filtri verifiche
   const f=S.vf;
 
   const oggi=new Date(); oggi.setHours(0,0,0,0);
@@ -1733,6 +1733,9 @@ function renderVerifiche(pb){
     return (v._asset?.nome||'').toLowerCase().includes(q)||
            (v._asset?.codice||'').toLowerCase().includes(q)||
            (v.ente_verificatore||'').toLowerCase().includes(q);
+  }).filter(v=>{
+    if(!f.sedeId) return true;
+    return v._sede?.id===f.sedeId;
   });
 
   // ordinamento
@@ -1751,6 +1754,18 @@ function renderVerifiche(pb){
       <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap">
         <span class="ct">Verifiche (${lista.length}/${S.verifiche.length})</span>
         <input class="fi-sm" id="vf-search" placeholder="🔍 Cerca asset, ente..." value="${esc(f.search)}" style="width:220px"/>
+        <select class="fi-sm" id="vf-sede">
+          <option value="">Tutte le sedi</option>
+          ${(()=>{
+            const areeOrd=[...S.aree].sort((a,b)=>(a.ordine||0)-(b.ordine||0));
+            const perArea={};
+            sediOrdinate().forEach(s=>{const k=s.area_id||'__';if(!perArea[k])perArea[k]=[];perArea[k].push(s);});
+            return [
+              ...areeOrd.filter(a=>perArea[a.id]).map(a=>`<optgroup label="${esc(a.nome)}">${perArea[a.id].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`),
+              ...(perArea['__']?[`<optgroup label="Altra area">${perArea['__'].map(s=>`<option value="${s.id}"${f.sedeId===s.id?' selected':''}>${esc(s.nome)}</option>`).join('')}</optgroup>`]:[])
+            ].join('');
+          })()}
+        </select>
       </div>
       ${isAdm?`<button class="btn bpg bsm" id="v-add">+ Nuova verifica</button>`:''}
     </div>
@@ -1788,6 +1803,7 @@ function renderVerifiche(pb){
   </div></div>`;
 
   $('vf-search').addEventListener('input',e=>{f.search=e.target.value;renderPage();});
+  $('vf-sede').addEventListener('change',e=>{f.sedeId=e.target.value;renderPage();});
   pb.querySelectorAll('[data-sort]').forEach(th=>th.addEventListener('click',()=>{f.sort=th.dataset.sort;renderPage();}));
   if(isAdm){
     $('v-add')?.addEventListener('click',()=>openVerificaModal(null));
