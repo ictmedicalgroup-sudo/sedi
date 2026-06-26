@@ -1984,12 +1984,14 @@ function openVerificaModal(v){
       <div class="fg"><div class="fl">Alert (giorni prima)</div><input class="fi" id="vm-alert" type="number" min="1" value="${v?.alert_giorni??60}"/></div>
     </div>
     <div class="fg"><div class="fl">Note</div><textarea class="fta" id="vm-note">${esc(v?.note||'')}</textarea></div>
-    ${v?alertSectionHTML('verifica',v.id):''}`;
+    ${v?alertSectionHTML('verifica',v.id):'<div style="font-size:11px;color:var(--g500);margin-top:10px">💡 Dopo aver salvato potrai configurare un alert email per questa verifica.</div>'}`;
   openM(v?'✏ Modifica verifica':'+ Nuova verifica',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
       const asset_id=$('vm-asset').value,data=$('vm-data').value;
-      if(!asset_id||!data){toast('Asset e data obbligatori','err');return;}
+      if(!asset_id&&!data){toast('Seleziona un asset e inserisci la data','err');return;}
+      if(!asset_id){toast('Seleziona un asset dalla lista di ricerca','err');return;}
+      if(!data){toast('Inserisci la data dell\'ultima verifica','err');return;}
       const payload={asset_id,ultima_verifica:data,periodicita:$('vm-per').value,
         ente_verificatore:$('vm-ente').value.trim()||null,
         alert_giorni:parseInt($('vm-alert').value)||60,
@@ -2022,7 +2024,8 @@ function openVerificaModal(v){
         <strong>${esc(a.nome)}</strong>${a.marca?` <span style="color:var(--g500)">${esc(a.marca)}</span>`:''}
       </div>`).join('');
       res.style.display='block';
-      res.querySelectorAll('[data-aid]').forEach(el=>el.addEventListener('click',()=>{
+      res.querySelectorAll('[data-aid]').forEach(el=>el.addEventListener('mousedown',(ev)=>{
+        ev.preventDefault();
         const a=S.asset.find(x=>x.id===el.dataset.aid);
         hid.value=a.id;
         inp.value=(a.codice?a.codice+' — ':'')+a.nome;
@@ -3203,13 +3206,17 @@ function openUtenteModal(u){
    PAGINA LOG
 ══════════════════════════════════════════ */
 function renderLog(pb){
-  let logPage=0,logQ='';
-  const PAGE=15;
+  let logPage=0,logQ='',logTipo='';
+  const PAGE=20;
+  const icona=(a)=>({'login':'🔑','logout':'🚪','login_failed':'⛔'}[a]||'📋');
   const render=()=>{
     const fl=S.log.filter(l=>{
+      if(logTipo&&l.azione!==logTipo) return false;
       if(!logQ) return true;
       const q=logQ.toLowerCase();
-      return (l.azione||'').toLowerCase().includes(q)||(l.dettaglio||'').toLowerCase().includes(q);
+      const utente=S.profili.find(p=>p.id===l.utente_id);
+      const uNome=utente?`${utente.cognome} ${utente.nome}`:'';
+      return (l.azione||'').toLowerCase().includes(q)||(l.dettaglio||'').toLowerCase().includes(q)||uNome.toLowerCase().includes(q);
     });
     const tot=fl.length,pages=Math.max(1,Math.ceil(tot/PAGE));
     if(logPage>=pages) logPage=pages-1;
@@ -3217,13 +3224,21 @@ function renderLog(pb){
     $('log-count').textContent=`${tot} eventi`;
     $('log-entries').innerHTML=!slice.length
       ?`<div class="emp"><div class="emi">📋</div><div class="emt">Nessun risultato</div></div>`
-      :slice.map(l=>`<div style="display:flex;gap:11px;padding:11px 0;border-bottom:1px solid var(--g100);align-items:flex-start">
-          <div style="width:30px;height:30px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:14px;flex-shrink:0">📌</div>
-          <div>
-            <div style="font-size:10.5px;color:var(--g500);font-family:monospace;margin-bottom:2px">${fmtDt(l.created_at)}</div>
-            <div style="font-size:13px;color:var(--g700)">${esc(String(l.dettaglio||l.azione||''))}</div>
+      :slice.map(l=>{
+        const utente=S.profili.find(p=>p.id===l.utente_id);
+        const uNome=utente?`${utente.cognome} ${utente.nome}`:l.utente_id?'Utente sconosciuto':'Sistema';
+        return `<div style="display:flex;gap:12px;padding:12px 0;border-bottom:1px solid var(--g100);align-items:flex-start">
+          <div style="width:34px;height:34px;border-radius:50%;background:var(--g100);display:flex;align-items:center;justify-content:center;font-size:16px;flex-shrink:0">${icona(l.azione)}</div>
+          <div style="flex:1;min-width:0">
+            <div style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-bottom:3px">
+              <span style="font-size:12px;font-weight:700;color:var(--g900)">${esc(uNome)}</span>
+              <span class="bg bg-usr" style="font-size:10px">${esc(l.azione||'—')}</span>
+              <span style="font-size:10.5px;color:var(--g400);font-family:monospace;margin-left:auto">${fmtDt(l.created_at)}</span>
+            </div>
+            ${l.dettaglio&&l.dettaglio!==l.azione?`<div style="font-size:12.5px;color:var(--g500)">${esc(l.dettaglio)}</div>`:''}
           </div>
-        </div>`).join('');
+        </div>`;
+      }).join('');
     $('log-pag').innerHTML=pages<=1?'':
       `<div style="display:flex;align-items:center;gap:8px;margin-top:14px;justify-content:center">
         <button class="bic" id="log-prev" ${logPage===0?'disabled style="opacity:.4"':''}>◀</button>
@@ -3233,17 +3248,23 @@ function renderLog(pb){
     $('log-prev')?.addEventListener('click',()=>{logPage--;render();});
     $('log-next')?.addEventListener('click',()=>{logPage++;render();});
   };
+  const tipiAzioni=[...new Set(S.log.map(l=>l.azione).filter(Boolean))].sort();
   pb.innerHTML=`<div class="fian"><div class="card">
     <div class="ch"><span class="ct">📋 Log</span>
-      <div style="display:flex;gap:9px;align-items:center">
+      <div style="display:flex;gap:9px;align-items:center;flex-wrap:wrap">
         <span id="log-count" style="font-size:12px;color:var(--g500)"></span>
-        <input class="fi-sm" id="log-search" style="width:220px" placeholder="🔍 Cerca…"/>
+        <input class="fi-sm" id="log-search" style="width:200px" placeholder="🔍 Cerca utente, azione…"/>
+        <select class="fi-sm" id="log-tipo">
+          <option value="">Tutte le azioni</option>
+          ${tipiAzioni.map(t=>`<option value="${t}"${logTipo===t?' selected':''}>${t}</option>`).join('')}
+        </select>
       </div>
     </div>
     <div class="cb"><div id="log-entries"></div><div id="log-pag"></div></div>
   </div></div>`;
   render();
   $('log-search').addEventListener('input',e=>{logQ=e.target.value;logPage=0;render();});
+  $('log-tipo').addEventListener('change',e=>{logTipo=e.target.value;logPage=0;render();});
 }
 
 /* ══════════════════════════════════════════
@@ -3291,7 +3312,7 @@ async function doLogin(){
     await loadAll();
     $('lp').classList.add('hid'); $('app').classList.remove('hid');
     renderSidebar(); goPage('griglia');
-    logAct('login','Accesso effettuato');
+    logAct('login',`Accesso effettuato — ${S.user.cognome} ${S.user.nome}`);
     toast(`Benvenuto, ${S.user.nome}! ✅`);
   }catch(e){
     err.textContent=e.message; err.style.display='block';
