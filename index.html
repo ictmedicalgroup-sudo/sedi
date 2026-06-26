@@ -2013,10 +2013,9 @@ function openVerificaModal(v){
   setTimeout(()=>{
     const inp=$('vm-asset-search'),hid=$('vm-asset'),res=$('vm-asset-results');
     if(!inp) return;
-    inp.addEventListener('input',()=>{
-      const q=inp.value.toLowerCase().trim();
-      if(!q){res.style.display='none';hid.value='';return;}
-      const matches=S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''} ${a.seriale||''}`.toLowerCase().includes(q)).slice(0,10);
+    const showMatches=(query)=>{
+      const q=query.toLowerCase().trim();
+      const matches=(q?S.asset.filter(a=>`${a.codice||''} ${a.nome} ${a.marca||''} ${a.seriale||''}`.toLowerCase().includes(q)):S.asset).slice(0,10);
       if(!matches.length){res.style.display='none';return;}
       res.innerHTML=matches.map(a=>`<div data-aid="${a.id}" style="padding:8px 12px;cursor:pointer;font-size:13px;border-bottom:1px solid var(--g100)"
         onmouseover="this.style.background='var(--g50)'" onmouseout="this.style.background=''">
@@ -2029,11 +2028,20 @@ function openVerificaModal(v){
         const a=S.asset.find(x=>x.id===el.dataset.aid);
         hid.value=a.id;
         inp.value=(a.codice?a.codice+' — ':'')+a.nome;
+        inp.dataset.lastSelected=inp.value;
         res.style.display='none';
       }));
+    };
+    inp.addEventListener('input',()=>{
+      hid.value=''; // ogni digitazione invalida la selezione precedente
+      if(!inp.value.trim()){res.style.display='none';return;}
+      showMatches(inp.value);
     });
-    inp.addEventListener('blur',()=>setTimeout(()=>{res.style.display='none';},200));
-    inp.addEventListener('focus',()=>{ if(inp.value) inp.dispatchEvent(new Event('input')); });
+    inp.addEventListener('blur',()=>setTimeout(()=>{res.style.display='none';},250));
+    inp.addEventListener('focus',()=>{
+      // Al refocus mostra tutti gli asset (o filtrati se l'utente ha già scritto qualcosa di proprio)
+      showMatches(hid.value?'':inp.value);
+    });
     // TEST button (solo se esiste già una config)
     const testBtn=$('al-test');
     if(testBtn&&!testBtn.disabled) testBtn.addEventListener('click',()=>sendTestAlert('verifica',v.id));
