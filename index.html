@@ -284,6 +284,7 @@ const S = {
   user: null, token: null, refreshToken: null,
   aree: [], sedi: [], categorie: [], sottocategorie: [], campi: [], valori: [], profili: [], log: [],
   ragioni: [], fornitori: [], assetCat: [], assetSubcat: [], asset: [], assetSedi: [], costi: [], documenti: [],
+  assetCaratteristiche: [],
   verifiche: [], convenzioni: [], alertCfg: [], impianti: [], impiantiScadenze: [],
   page: 'griglia',
   // filtri griglia
@@ -427,7 +428,7 @@ async function logAct(azione,dettaglio){
    CARICAMENTO DATI
 ══════════════════════════════════════════ */
 async function loadAll(){
-  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,assetSedi,fornitori,costi,verifiche,convenzioni,alertCfg,impianti,impiantiScadenze]=await Promise.all([
+  const [aree,sedi,ragioni,categorie,sottocategorie,campi,valori,profili,log,assetCat,assetSubcat,asset,assetSedi,fornitori,costi,verifiche,convenzioni,alertCfg,impianti,impiantiScadenze,assetCaratteristiche]=await Promise.all([
     db('GET',T('aree'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('sedi'),{ord:'ordine.asc,nome.asc'}),
     db('GET',T('ragioni_sociali'),{ord:'nome.asc'}),
@@ -448,6 +449,7 @@ async function loadAll(){
     db('GET',T('alert_config'),{ord:'created_at.asc'}),
     db('GET',T('impianti'),{ord:'nome.asc'}),
     db('GET',T('impianti_scadenze'),{ord:'data_scadenza.asc'}),
+    db('GET',T('asset_caratteristiche'),{}),
   ]);
   S.aree=aree||[];S.sedi=sedi||[];S.ragioni=ragioni||[];S.categorie=categorie||[];
   S.sottocategorie=sottocategorie||[];S.campi=campi||[];
@@ -455,7 +457,7 @@ async function loadAll(){
   S.assetCat=assetCat||[];S.assetSubcat=assetSubcat||[];S.asset=asset||[];
   S.assetSedi=assetSedi||[];S.fornitori=fornitori||[];S.costi=costi||[];
   S.verifiche=verifiche||[];S.convenzioni=convenzioni||[];S.alertCfg=alertCfg||[];
-  S.impianti=impianti||[];S.impiantiScadenze=impiantiScadenze||[];
+  S.impianti=impianti||[];S.impiantiScadenze=impiantiScadenze||[];S.assetCaratteristiche=assetCaratteristiche||[];
   // init sedi sel default (tutte)
   if(!S.griglia.sediSel.length) S.griglia.sediSel=sediOrdinate().map(s=>s.id);
   // mappa: default nessuna sede selezionata (popup tutti chiusi)
@@ -1293,6 +1295,14 @@ function buildAssetTableHTML(lista){
         <button class="btn bs bsm" data-adoc="${a.id}" title="Documenti">📎</button>
         <button class="btn bs bsm" data-aloc="${a.id}" title="Ubicazioni">📍</button>
         <button class="btn bs bsm" data-acost="${a.id}" title="Costi">💰</button>
+        ${(()=>{
+          const sc=S.assetSubcat.find(x=>x.id===a.sottocategoria_id);
+          const cat=S.assetCat.find(x=>x.id===sc?.categoria_id);
+          if(!cat?.macchine) return '';
+          const ch=S.assetCaratteristiche.find(x=>x.asset_id===a.id)||{};
+          const ic=(flag,ico,title)=>`<button class="btn bsm" data-acar="${a.id}" data-tipo="${ico}" title="${title}" style="background:${flag?'var(--verde)':'var(--g200)'};color:${flag?'#fff':'var(--g500)'};border:none;cursor:pointer;border-radius:var(--rsm);padding:3px 7px;font-size:13px">${ico}</button>`;
+          return ic(ch.verbale_consegna,'📋','Verbale di consegna')+ic(ch.certificato_ce,'🏷','Certificato CE')+ic(ch.verbale_collaudo,'🔧','Verbale di collaudo');
+        })()}
         <button class="btn bs bsm" data-ae="${a.id}">✏</button>
         <button class="btn bd bsm" data-ad="${a.id}">🗑</button>
       </div></td>
@@ -1343,6 +1353,62 @@ function bindAssetTableEvents(){
   wrap.querySelectorAll('[data-adoc]').forEach(b=>b.addEventListener('click',()=>openDocumentiModal(b.dataset.adoc)));
   wrap.querySelectorAll('[data-aloc]').forEach(b=>b.addEventListener('click',()=>openUbicazioniModal(b.dataset.aloc)));
   wrap.querySelectorAll('[data-acost]').forEach(b=>b.addEventListener('click',()=>openCostiAssetModal(b.dataset.acost)));
+  wrap.querySelectorAll('[data-acar]').forEach(b=>b.addEventListener('click',()=>openCaratteristicheModal(b.dataset.acar,b.dataset.tipo)));
+}
+
+async function openCaratteristicheModal(assetId, tipo){
+  const asset=S.asset.find(x=>x.id===assetId);
+  let ch=S.assetCaratteristiche.find(x=>x.asset_id===assetId)||{asset_id:assetId};
+
+  const TIPI={
+    '📋':{label:'Verbale di consegna', flagKey:'verbale_consegna', dataKey:'verbale_consegna_data', noteKey:'verbale_consegna_note', hasDate:true},
+    '🏷':{label:'Certificato CE',       flagKey:'certificato_ce',    dataKey:null,                   noteKey:'certificato_ce_note',    hasDate:false},
+    '🔧':{label:'Verbale di collaudo',  flagKey:'verbale_collaudo',  dataKey:'verbale_collaudo_data', noteKey:'verbale_collaudo_note',  hasDate:true},
+  };
+  // Per verbale_collaudo la data viene dal campo collaudo dell'asset
+  const t=TIPI[tipo]; if(!t) return;
+
+  const flagVal=!!ch[t.flagKey];
+  const dataVal=t.hasDate?(t.dataKey?ch[t.dataKey]||'':asset?.collaudo||''):'';
+  const noteVal=ch[t.noteKey]||'';
+
+  const body=`
+    <div style="font-size:13px;color:var(--g500);margin-bottom:12px">Asset: <strong>${esc(asset?.nome||'')}</strong>${asset?.codice?` (${esc(asset.codice)})`:''}</div>
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin-bottom:14px">
+      <div class="tg"><input type="checkbox" id="car-flag" ${flagVal?'checked':''}><span class="tsl"></span></div>
+      <span style="font-size:13px;font-weight:600">${esc(t.label)} presente</span>
+    </label>
+    ${t.hasDate?`<div class="fg"><div class="fl">Data</div><input class="fi" id="car-data" type="date" value="${esc(dataVal)}"/></div>`:''}
+    <div class="fg"><div class="fl">Note</div><textarea class="fta" id="car-note">${esc(noteVal)}</textarea></div>`;
+
+  openM(`${tipo} ${t.label}`,body,[
+    {l:'Annulla',c:'bs',a:closeM},
+    {l:'Salva',c:'bpg',a:async()=>{
+      const flag=$('car-flag').checked;
+      const nota=$('car-note').value.trim()||null;
+      const dataInput=t.hasDate?($('car-data')?.value||null):null;
+
+      const payload={[t.flagKey]:flag,[t.noteKey]:nota};
+      if(t.dataKey) payload[t.dataKey]=dataInput;
+      // Per verbale_collaudo aggiorna anche asset.collaudo
+      if(tipo==='🔧'&&dataInput!==undefined){
+        await db('PATCH',T('asset'),{flt:`id=eq.${assetId}`,body:{collaudo:dataInput||null}});
+        S.asset=S.asset.map(x=>x.id===assetId?{...x,collaudo:dataInput||null}:x);
+      }
+
+      try{
+        if(ch.id){
+          await db('PATCH',T('asset_caratteristiche'),{flt:`id=eq.${ch.id}`,body:payload});
+          S.assetCaratteristiche=S.assetCaratteristiche.map(x=>x.id===ch.id?{...x,...payload}:x);
+        }else{
+          const [nc]=await db('POST',T('asset_caratteristiche'),{body:{asset_id:assetId,...payload}});
+          S.assetCaratteristiche.push(nc);
+        }
+        S._assetDirty=true;
+        closeM(); renderAssetTable(); toast('Salvato ✅');
+      }catch(e){toast(e.message,'err');}
+    }},
+  ]);
 }
 
 function openAssetModal(a){
@@ -2458,7 +2524,7 @@ function buildAssetStrutturaHTML(){
   return [...S.assetCat].sort((a,b)=>a.nome.localeCompare(b.nome)).map(cat=>`
     <div class="str-cat">
       <div class="str-cat-hdr">
-        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${cat.icona||'📦'}</span><span style="font-weight:700">${esc(cat.nome)}</span></div>
+        <div style="display:flex;align-items:center;gap:8px"><span style="font-size:18px">${cat.icona||'📦'}</span><span style="font-weight:700">${esc(cat.nome)}</span>${cat.macchine?'<span class="bg" style="background:#EEF5E3;color:#4a6b20;font-size:10px">Macchine</span>':''}</div>
         <div class="tda">
           <button class="btn bpg bsm" data-assc-add="${cat.id}">+ Sottocategoria</button>
           <button class="btn bs bsm" data-ace="${cat.id}">✏</button>
@@ -2513,12 +2579,15 @@ function bindAssetStrutturaEvents(){
 function openAssetCatModal(cat){
   openM(cat?'✏ Modifica categoria asset':'+ Nuova categoria asset',`
     <div class="fg"><div class="fl">Nome *</div><input class="fi" id="ac-nome" value="${esc(cat?.nome||'')}"/></div>
-    <div class="fg"><div class="fl">Icona (emoji)</div><input class="fi" id="ac-ico" value="${esc(cat?.icona||'📦')}" style="width:80px"/></div>`,
+    <div class="fg"><div class="fl">Icona (emoji)</div><input class="fi" id="ac-ico" value="${esc(cat?.icona||'📦')}" style="width:80px"/></div>
+    <label style="display:flex;align-items:center;gap:8px;cursor:pointer;margin-top:4px">
+      <input type="checkbox" id="ac-macchine" ${cat?.macchine?'checked':''}/> <span class="fl" style="margin:0">Categoria "Macchine" (mostra verbali/certificati)</span>
+    </label>`,
   [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
-    const nome=$('ac-nome').value.trim(),icona=$('ac-ico').value.trim()||'📦';
+    const nome=$('ac-nome').value.trim(),icona=$('ac-ico').value.trim()||'📦',macchine=$('ac-macchine').checked;
     if(!nome){toast('Nome obbligatorio','err');return;}
-    if(cat){await db('PATCH',T('asset_categorie'),{flt:`id=eq.${cat.id}`,body:{nome,icona}});S.assetCat=S.assetCat.map(x=>x.id===cat.id?{...x,nome,icona}:x);}
-    else{const[nc]=await db('POST',T('asset_categorie'),{body:{nome,icona,ordine:S.assetCat.length}});S.assetCat.push(nc);}
+    if(cat){await db('PATCH',T('asset_categorie'),{flt:`id=eq.${cat.id}`,body:{nome,icona,macchine}});S.assetCat=S.assetCat.map(x=>x.id===cat.id?{...x,nome,icona,macchine}:x);}
+    else{const[nc]=await db('POST',T('asset_categorie'),{body:{nome,icona,macchine,ordine:S.assetCat.length}});S.assetCat.push(nc);}
     closeM();refreshAssetStruttura();toast(cat?'Categoria aggiornata':'Categoria aggiunta ✅');
   }}]);
 }
