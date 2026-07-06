@@ -1292,17 +1292,17 @@ function buildAssetTableHTML(lista){
       <td>${ub?`<span class="bg bg-on">${esc(sedeNome(ub.sede_id))}</span>`:'<span class="bg bg-off">Non assegnato</span>'}</td>
       <td>${costiA?`<span class="bg" style="background:var(--blue-xlight);color:var(--navy)">${costiA} costi</span>`:'—'}</td>
       <td><div class="tda">
-        <button class="btn bs bsm" data-adoc="${a.id}" title="Documenti">📎</button>
-        <button class="btn bs bsm" data-aloc="${a.id}" title="Ubicazioni">📍</button>
-        <button class="btn bs bsm" data-acost="${a.id}" title="Costi">💰</button>
         ${(()=>{
           const sc=S.assetSubcat.find(x=>x.id===a.sottocategoria_id);
           const cat=S.assetCat.find(x=>x.id===sc?.categoria_id);
-          if(!cat?.macchine) return '';
+          if(!cat?.macchine) return '<span style="display:inline-block;width:29px;height:25px;border:1px solid var(--g200);border-radius:var(--rsm);background:transparent;margin:0 1px"></span><span style="display:inline-block;width:29px;height:25px;border:1px solid var(--g200);border-radius:var(--rsm);background:transparent;margin:0 1px"></span><span style="display:inline-block;width:29px;height:25px;border:1px solid var(--g200);border-radius:var(--rsm);background:transparent;margin:0 1px"></span>';
           const ch=S.assetCaratteristiche.find(x=>x.asset_id===a.id)||{};
-          const ic=(flag,ico,title)=>`<button class="btn bsm" data-acar="${a.id}" data-tipo="${ico}" title="${title}" style="background:${flag?'var(--verde)':'var(--g200)'};color:${flag?'#fff':'var(--g500)'};border:none;cursor:pointer;border-radius:var(--rsm);padding:3px 7px;font-size:13px">${ico}</button>`;
+          const ic=(flag,ico,title)=>`<button class="btn bsm" data-acar="${a.id}" data-tipo="${ico}" title="${title}" style="background:${flag?'var(--verde)':'var(--g100)'};color:${flag?'#fff':'var(--g400)'};border:1px solid var(--g200);cursor:pointer;border-radius:var(--rsm);padding:3px 7px;font-size:13px">${ico}</button>`;
           return ic(ch.verbale_consegna,'📋','Verbale di consegna')+ic(ch.certificato_ce,'🏷','Certificato CE')+ic(ch.verbale_collaudo,'🔧','Verbale di collaudo');
         })()}
+        <button class="btn bs bsm" data-adoc="${a.id}" title="Documenti">📎</button>
+        <button class="btn bs bsm" data-aloc="${a.id}" title="Ubicazioni">📍</button>
+        <button class="btn bs bsm" data-acost="${a.id}" title="Costi">💰</button>
         <button class="btn bs bsm" data-ae="${a.id}">✏</button>
         <button class="btn bd bsm" data-ad="${a.id}">🗑</button>
       </div></td>
@@ -2598,7 +2598,7 @@ function openAssetSubcatModal(sc,catId){
     <div class="fg"><div class="fl">Nome *</div><input class="fi" id="asc-nome" value="${esc(sc?.nome||'')}"/></div>
     ${sc?`<div class="fg"><div class="fl">Categoria</div>
       <select class="fse" id="asc-cat">
-        ${S.assetCat.map(cat=>`<option value="${cat.id}"${cat.id===sc.categoria_id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
+        ${[...S.assetCat].sort((a,b)=>a.nome.localeCompare(b.nome)).map(cat=>`<option value="${cat.id}"${cat.id===sc.categoria_id?' selected':''}>${esc(cat.icona||'')} ${esc(cat.nome)}</option>`).join('')}
       </select></div>`:''}`,
   [{l:'Annulla',c:'bs',a:closeM},{l:'Salva',c:'bpg',a:async()=>{
     const nome=$('asc-nome').value.trim(); if(!nome){toast('Nome obbligatorio','err');return;}
