@@ -2621,13 +2621,15 @@ function renderRagioni(pb){
     </div>
     ${!ragioni.length
       ?`<div class="emp"><div class="emi">🏛</div><div class="emt">Nessuna ragione sociale</div><div class="ems">Aggiungi le società del gruppo</div></div>`
-      :`<table class="dt"><thead><tr><th>Ragione sociale</th><th>Partita IVA</th><th>Indirizzo</th><th>Sedi associate</th><th>Azioni</th></tr></thead><tbody>
+      :`<table class="dt"><thead><tr><th>Ragione sociale</th><th>P.IVA / C.F.</th><th>Sede legale</th><th>Contatti</th><th>Sedi</th><th>Azioni</th></tr></thead><tbody>
       ${ragioni.map(r=>{
         const cnt=S.sedi.filter(s=>s.ragione_sociale_id===r.id).length;
+        const indirizzo=[r.indirizzo,r.sede_legale_cap,r.sede_legale_citta,r.sede_legale_provincia].filter(Boolean).join(', ');
         return `<tr>
-          <td><div class="tn">${esc(r.nome)}</div>${r.note?`<div class="ts">${esc(r.note)}</div>`:''}</td>
-          <td>${esc(r.piva||'—')}</td>
-          <td>${esc(r.indirizzo||'—')}</td>
+          <td><div class="tn">${esc(r.nome)}</div>${r.pec?`<div class="ts">PEC: ${esc(r.pec)}</div>`:''}</td>
+          <td style="font-size:12px">${r.piva?`<div>P.IVA: ${esc(r.piva)}</div>`:''}<div style="color:var(--g500)">${r.codice_fiscale?`C.F.: ${esc(r.codice_fiscale)}`:''}</div></td>
+          <td style="font-size:12px;color:var(--g500)">${esc(indirizzo||'—')}</td>
+          <td style="font-size:12px">${r.telefono?`<div>📞 ${esc(r.telefono)}</div>`:''}<div style="color:var(--g500)">${r.email?`✉ ${esc(r.email)}`:''}</div></td>
           <td><span class="bg ${cnt?'bg-on':'bg-off'}">${cnt} ${cnt===1?'sede':'sedi'}</span></td>
           <td><div class="tda">
             <button class="btn bs bsm" data-re="${r.id}">✏</button>
@@ -2657,15 +2659,48 @@ function openRagioneModal(r){
       <div class="fg"><div class="fl">Partita IVA</div><input class="fi" id="rm-piva" value="${esc(r?.piva||'')}"/></div>
       <div class="fg"><div class="fl">Codice fiscale</div><input class="fi" id="rm-cf" value="${esc(r?.codice_fiscale||'')}"/></div>
     </div>
-    <div class="fg"><div class="fl">Indirizzo sede legale</div><input class="fi" id="rm-ind" value="${esc(r?.indirizzo||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Codice SDI</div><input class="fi" id="rm-sdi" value="${esc(r?.codice_sdi||'')}"/></div>
+      <div class="fg"><div class="fl">PEC</div><input class="fi" id="rm-pec" value="${esc(r?.pec||'')}"/></div>
+    </div>
+    <div class="fr">
+      <div class="fg"><div class="fl">REA</div><input class="fi" id="rm-rea" value="${esc(r?.rea||'')}"/></div>
+      <div class="fg"><div class="fl">Capitale sociale</div><input class="fi" id="rm-cap-soc" value="${esc(r?.capitale_sociale||'')}"/></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Sede legale</div>
+    <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="rm-ind" value="${esc(r?.indirizzo||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">CAP</div><input class="fi" id="rm-cap" value="${esc(r?.sede_legale_cap||'')}"/></div>
+      <div class="fg" style="flex:2"><div class="fl">Città</div><input class="fi" id="rm-citta" value="${esc(r?.sede_legale_citta||'')}"/></div>
+      <div class="fg"><div class="fl">Prov.</div><input class="fi" id="rm-prov" value="${esc(r?.sede_legale_provincia||'')}" style="max-width:60px"/></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Contatti</div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Telefono</div><input class="fi" id="rm-tel" value="${esc(r?.telefono||'')}"/></div>
+      <div class="fg"><div class="fl">Email</div><input class="fi" id="rm-email" value="${esc(r?.email||'')}"/></div>
+    </div>
+    <div class="fg"><div class="fl">IBAN</div><input class="fi" id="rm-iban" value="${esc(r?.iban||'')}"/></div>
     <div class="fg"><div class="fl">Note</div><textarea class="fta" id="rm-note" style="min-height:60px">${esc(r?.note||'')}</textarea></div>`;
   openM(r?'✏ Modifica ragione sociale':'+ Nuova ragione sociale',body,[
     {l:'Annulla',c:'bs',a:closeM},
     {l:'Salva',c:'bpg',a:async()=>{
       const nome=$('rm-nome').value.trim();
       if(!nome){toast('Il nome è obbligatorio','err');return;}
-      const payload={nome,piva:$('rm-piva').value.trim()||null,codice_fiscale:$('rm-cf').value.trim()||null,
-        indirizzo:$('rm-ind').value.trim()||null,note:$('rm-note').value.trim()||null};
+      const payload={nome,
+        piva:$('rm-piva').value.trim()||null,
+        codice_fiscale:$('rm-cf').value.trim()||null,
+        codice_sdi:$('rm-sdi').value.trim()||null,
+        pec:$('rm-pec').value.trim()||null,
+        rea:$('rm-rea').value.trim()||null,
+        capitale_sociale:$('rm-cap-soc').value.trim()||null,
+        indirizzo:$('rm-ind').value.trim()||null,
+        sede_legale_cap:$('rm-cap').value.trim()||null,
+        sede_legale_citta:$('rm-citta').value.trim()||null,
+        sede_legale_provincia:$('rm-prov').value.trim()||null,
+        telefono:$('rm-tel').value.trim()||null,
+        email:$('rm-email').value.trim()||null,
+        iban:$('rm-iban').value.trim()||null,
+        note:$('rm-note').value.trim()||null};
       try{
         if(r){
           await db('PATCH',T('ragioni_sociali'),{flt:`id=eq.${r.id}`,body:payload});
@@ -2790,7 +2825,19 @@ function openSedeModal(sede){
         <option value="">— Nessuna —</option>
         ${S.ragioni.map(r=>`<option value="${r.id}"${sede?.ragione_sociale_id===r.id?' selected':''}>${esc(r.nome)}</option>`).join('')}
       </select></div>
-    <div class="fg"><div class="fl">Indirizzo</div><input class="fi" id="sm-ind" value="${esc(sede?.indirizzo||'')}"/></div>
+    <div style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Indirizzo</div>
+    <div class="fg"><div class="fl">Indirizzo (via/piazza)</div><input class="fi" id="sm-ind" value="${esc(sede?.indirizzo||'')}"/></div>
+    <div class="fr">
+      <div class="fg"><div class="fl">CAP</div><input class="fi" id="sm-cap" value="${esc(sede?.cap||'')}"/></div>
+      <div class="fg" style="flex:2"><div class="fl">Città</div><input class="fi" id="sm-citta" value="${esc(sede?.citta||'')}"/></div>
+      <div class="fg"><div class="fl">Prov.</div><input class="fi" id="sm-prov" value="${esc(sede?.provincia||'')}" style="max-width:60px"/></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Contatti</div>
+    <div class="fr">
+      <div class="fg"><div class="fl">Telefono</div><input class="fi" id="sm-tel" value="${esc(sede?.telefono||'')}"/></div>
+      <div class="fg"><div class="fl">Email</div><input class="fi" id="sm-email" value="${esc(sede?.email||'')}"/></div>
+    </div>
+    <div style="font-size:11px;font-weight:700;color:var(--g500);text-transform:uppercase;letter-spacing:.5px;margin:10px 0 4px">Coordinate</div>
     <div class="fr">
       <div class="fg"><div class="fl">Latitudine</div><input class="fi" id="sm-lat" type="number" step="0.0001" value="${sede?.lat||''}" placeholder="es. 43.7228"/></div>
       <div class="fg"><div class="fl">Longitudine</div><input class="fi" id="sm-lng" type="number" step="0.0001" value="${sede?.lng||''}" placeholder="es. 10.9021"/></div>
@@ -2809,7 +2856,13 @@ function openSedeModal(sede){
       const attiva=$('sm-att').checked,rag=$('sm-rag').value;
       if(!nome){toast('Il nome è obbligatorio','err');return;}
       try{
-        const payload={nome,area_id:area||null,indirizzo:ind,lat,lng,attiva,ragione_sociale_id:rag||null};
+        const payload={nome,area_id:area||null,indirizzo:ind||null,
+          cap:$('sm-cap').value.trim()||null,
+          citta:$('sm-citta').value.trim()||null,
+          provincia:$('sm-prov').value.trim()||null,
+          telefono:$('sm-tel').value.trim()||null,
+          email:$('sm-email').value.trim()||null,
+          lat,lng,attiva,ragione_sociale_id:rag||null};
         if(sede){
           await db('PATCH',T('sedi'),{flt:`id=eq.${sede.id}`,body:payload});
           S.sedi=S.sedi.map(s=>s.id===sede.id?{...s,...payload}:s);
@@ -2818,7 +2871,6 @@ function openSedeModal(sede){
           logAct('sede_create',`Nuova sede: ${nome}`);
         }
         closeM(); renderPage(); toast(sede?'Sede aggiornata':'Sede aggiunta ✅');
-        // aggiorna mappa se aperta
         if(S.mappa.leaflet&&!sede) { if(!S.mappa.sediSel.includes(ns?.id)&&ns) S.mappa.sediSel.push(ns.id); updateMapMarkers(); }
       }catch(e){toast(e.message,'err');}
     }},
